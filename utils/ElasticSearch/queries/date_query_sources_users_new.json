@@ -1,0 +1,22 @@
+{
+	"query": {
+    "bool": {
+      "must": [
+        {
+          "range": {
+            "created_at": {
+              "gte": "{{startDate}}",
+              "lte": "{{endDate}}"
+            }
+          }
+        },
+        {
+          "terms": {
+            "user.id_str": {{userList}}
+          }
+        }
+      ]
+    }
+  },
+  "_source": {{sourceList}}
+}

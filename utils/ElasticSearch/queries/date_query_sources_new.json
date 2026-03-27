@@ -1,0 +1,13 @@
+{
+	"_source": "{{sourceList}}",
+	"bool": {
+		"must": {
+			"range": {
+				"created_at": {
+					"gte": "{{startDate}}",
+					"lte": "{{endDate}}"
+				}
+			}
+		}
+	}
+}

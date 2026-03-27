@@ -1,0 +1,1 @@
+from .SimilarityFunctionManager import SimilarityFunctionManager

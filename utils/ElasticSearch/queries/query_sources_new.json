@@ -1,0 +1,6 @@
+{
+	"_source": {{sourceList}},
+	"query": {
+      "match_all": {}
+    },
+}

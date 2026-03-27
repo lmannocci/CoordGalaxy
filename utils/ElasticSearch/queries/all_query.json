@@ -1,0 +1,8 @@
+{
+	"query": {
+        "match_all": {}
+    },
+    "sort": [
+        {"created_at": "asc"}
+    ]
+}

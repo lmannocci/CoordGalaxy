@@ -1,0 +1,9 @@
+{
+	"_source": {{sourceList}},
+	"query": {
+      "match_all": {}
+    },
+    "sort": [
+        {"created_at": "asc"}
+    ]
+}
