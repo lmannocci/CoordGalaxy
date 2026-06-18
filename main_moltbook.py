@@ -3,13 +3,10 @@ from SelectionUserManager import SelectionUserManager
 from SimilarityFunctionManager import SimilarityFunctionManager
 from FilterGraphManager.FilterGraphManager import *
 from NetworkManager import NetworkManager
-# from Objects.TimeWindow.TimeWindow import *
-# from Objects.CDAlgorithm.CDAlgorithm import *
 from CommunityDetectionManager.CommunityDetectionManager import *
 from CharacterizationManager.CharacterizationManager import *
 from OverlappingCommunityManager.OverlappingCommunityManager import *
-
-from input_config_IORussia import *
+from input_config_moltbook import *
 from utils.mainMethods import *
 from utils.Checkpoint.Checkpoint import *
 
@@ -18,144 +15,132 @@ absolute_path = os.path.dirname(__file__)
 results = os.path.join(absolute_path, f".{os.sep}results{os.sep}")
 data_path = os.path.join(absolute_path, f".{os.sep}data{os.sep}")
 path_dataset = os.path.join(data_path, f".{os.sep}{dataset_name}{os.sep}")
-# time_range_from = "Tue Nov 12 00:00:00 +0000 2019"  # "Fri Oct 02 00:00:00 +0000 2020" già fatto da Sere
-# time_range_to = "Thu Dec 12 23:59:59 +0000 2019"
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     lm = LogManager('main')
     ch = Checkpoint()
     
-    # DOWNLOAD DATA FROM ELASTICSEARCH
     im = InputManager(dataset_name)
-    # read directly the csv file with all tweets, but not normalized
-    df = ch.read_dataframe(f"{path_dataset}1_moltbook_tweets.csv", dtype=dtype)
-    # rename column and other operations
-    df = im.normalize_data(df, filename="2_moltbook_comments.csv")
-    df = ch.read_dataframe(f"{path_dataset}2_moltbook_comments.csv", dtype=dtype)
 
-    # EXTARCT URL HASHTAG AND MENTION
-    # url_df = im.extract_url_dataset(df, f"2_moltbook_comments_URL.csv", known_url, parse_urls=False)
-    # text_df = im.extract_text_dataset(df, f"2_moltbook_comments_text.npy") 
+    # NORMALIZATION
+    for file_prefix in ['comment','post']: #'comment', 
+        df = ch.read_dataframe(f"{path_dataset}1_moltbook_{file_prefix}.csv", dtype=dtype)
+        df = im.normalize_data(df, filename=f"moltbook_{file_prefix}Text.csv")
 
-    # EXTRACT RETWEET, REPLY
-    df = ch.read_dataframe(f"{path_dataset}2_moltbook_comments.csv", dtype=dtype)
-    reply_df = im.extract_reply_dataset(df, "2_moltbook_comments_reply.csv")
+        # EXTRACT URL, TEXT, REPLY
+        df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}Text.csv", dtype=dtype)
+        url_df = im.extract_url_dataset(df, f"moltbook_{file_prefix}URL.csv", known_url, parse_urls=False)
+        text_df = im.extract_text_dataset(df, f"moltbook_{file_prefix}Text.npy") # i save the embeddings in npy format
+        if file_prefix == 'comment':
+            df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}Text.csv", dtype=dtype)
+            reply_df = im.extract_reply_dataset(df, f"moltbook_comment.csv")
 
-    # FILTER URL, HASHTAG, MENTION
-    # url_df = ch.read_dataframe(f"{path_dataset}2_moltbook_comments_URL.csv", dtype=dtype)
-    # url_filtered = im.filter_content_df(url_df, co_action_column['co-url-domain'], excludeDomainList, filename=f"2_moltbook_comments_URL_filtered.csv")
-    
+        # CONVERSION MANAGER - DO NOT RUN IN GENERAL
+        df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}URL.csv", dtype=dtype) 
+        cm = ConversionManager()
+        df = cm.compress_user_ids(df)
+        ch.save_dataframe(df, f"{path_dataset}moltbook_{file_prefix}URL.csv")
+        df = ch.read_dataframe(f"{path_dataset}moltbook_comment.csv", dtype=dtype) 
+        if file_prefix == 'comment':
+            df = cm.compress_user_ids(df)
+            ch.save_dataframe(df, f"{path_dataset}moltbook_comment.csv")
+
+
     # COORDINATED BEHAVIOR BEGIN
     # ------------------------------------------------------------------------------------------------------------------
-    # SELECT INITIAL USERS
-    # for user_fraction in [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]:
-    #     su = SelectionUserManager(dataset_name, user_fraction, type_filter, co_action_list)
-    #     fu = su.filter_users(filter_dataset, save_dataset=False, save_info=True)
-
-    # su = SelectionUserManager(dataset_name, user_fraction, type_filter, co_action_list)
-    # su.plot_overlapping_percentage_users()
-    # su.plot_number_users()
-    # fu = su.filter_users(filter_dataset)
 
     # SIMILARITY
-    for co_action in co_action_list:
-        ca = CoAction(co_action, similarity_function)
-        sm = SimilarityFunctionManager(dataset_name, user_fraction, type_filter, tw, ca, parallelize_window=70)
+    for ca in list_ca:
+        sm = SimilarityFunctionManager(dataset_name, user_fraction, type_filter, tw, ca, parallelize_window=70, text_similarity_threshold=text_similarity_threshold)
         sm.compute_similarity()
+        sm.convert_ids_edge_list() # DO NOT RUN IN GENERAL
 
-    # CHARACTERIZATION NO FILTER
-    # chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
-    # chm.compute_threshold_statistics(2, 480, 5, 'nAction')
-    # chm.plot_threshold_statistics('nAction', 10)
-    # chm.select_threshold_statistics(0.04, 0.3, 0.02, False, 'nAction', 'node')
-    # chm.select_threshold_statistics(10000, 20000, 1000, True, 'nAction', 'node')
-    # chm.compute_metrics_networks(metrics_to_compute)
+    # # CHARACTERIZATION NO FILTER
+    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
+    chm.compute_threshold_statistics(2, 480, 5, 'nAction')
+    chm.plot_threshold_statistics('nAction', 10)
+    chm.select_threshold_statistics(0.04, 0.3, 0.02, False, 'nAction', 'node')
+    chm.select_threshold_statistics(10000, 20000, 1000, True, 'nAction', 'node')
+    chm.compute_metrics_networks(metrics_to_compute)
 
-    # # FILTER NETWORKS - nAction
-    # nAction_th = {"co-retweet": 2, "co-reply": 2, "co-url-domain": 2, "co-mention": 2, "co-hashtag": 7}
-    # for co_action in co_action_list:
-    #     ca = CoAction(co_action, similarity_function)
-    #     filter_instance = Filter("merge_filter_action", nAction_th[co_action], None)
-    #     fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
-    #     fm.filter_graph()
+    # FILTER NETWORKS - nAction
+    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
+    for ca in list_ca:
+        filter_instance = dict_ca_filter2[ca.get_co_action()]
+        fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
+        fm.filter_graph()
 
-    # # CHARACTERIZATION ON FILTERED NETWORK with threshold on nAction, chosen by selecting about 20000 nodes on each layer
-    # chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
-    # chm.compute_threshold_statistics(0.01, 0.99, 0.01, 'w_')
-    # chm.plot_threshold_statistics('w_', 0.01)
-    # chm.select_threshold_statistics(10000, 100000, 10000, True, 'w_', 'edge')
-    # chm.compute_metrics_networks(metrics_to_compute)
+    # CHARACTERIZATION ON FILTERED NETWORK with threshold on nAction, chosen by selecting about 20000 nodes on each layer
+    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter2)
+    chm.compute_threshold_statistics(0.01, 0.99, 0.01, 'w_')
+    chm.plot_threshold_statistics('w_', 0.01)
+    chm.select_threshold_statistics(10000, 100000, 10000, True, 'w_', 'edge')
+    chm.compute_metrics_networks(metrics_to_compute)
 
 
     # # FILTER NETWORKS - weight
-    # nAction_th = {"co-retweet": 2, "co-reply": 2, "co-url-domain": 2, "co-mention": 2, "co-hashtag": 7}
-    # weight_th = {"co-retweet": 0.137, "co-reply": 0.584, "co-url-domain": 0.268, "co-mention": 0.117, "co-hashtag": 0.246}
-    # for co_action in co_action_list:
-    #     ca = CoAction(co_action, similarity_function)
-    #     # filter_instance = Filter("th", weight_th[co_action], Filter("merge_filter_action", nAction_th[co_action], None))
-    #     filter_instance = Filter("median", None, Filter("merge_filter_action", nAction_th[co_action], None))
-    #     fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
-    #     fm.filter_graph()
+    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
+    # weight_th = {"co-comment": 0.06, "co-commentText": 0.85, "co-commentURL": 0.32, "co-postText": 0.87, "co-postURL": 0.99}
+    for ca in list_ca:
+        filter_instance = dict_ca_filter3[ca.get_co_action()]
+        fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
+        fm.filter_graph()
 
     # # CHARACTERIZATION Compute metrics
-    # chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
-    # chm.compute_metrics_networks(metrics_to_compute)
+    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3)
+    chm.compute_metrics_networks(metrics_to_compute)
 
-    # # CREATE NETWORKS
-    # nm = NetworkManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
-    # nm.create_weighted_graph()
-    # nm.create_weighted_multiplex_network()
-    # nm.save_gephi_network()
+    # CREATE NETWORKS
+    nm = NetworkManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3)
+    nm.create_weighted_graph()
+    nm.create_weighted_multiplex_network()
+    nm.save_gephi_network()
 
-    # chm.get_ML_summary()
-    # chm.get_ML_layer_comparison()
-    # chm.plot_ML_layer_comparison()
+    chm.get_ML_summary()
+    chm.get_ML_layer_comparison()
+    chm.plot_ML_layer_comparison()
 
-    # nAction_th = {"co-retweet": 2, "co-reply": 2, "co-url-domain": 2, "co-mention": 2, "co-hashtag": 7}
-    # weight_th = {"co-retweet": 0.137, "co-reply": 0.584, "co-url-domain": 0.268, "co-mention": 0.117, "co-hashtag": 0.246}
+    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
+    # Weight thresholds: weight_th = {"co-comment": 0.06, "co-commentText": 0.85, "co-commentURL": 0.32, "co-postText": 0.87, "co-postURL": 0.99}
 
-    # # COMMUNITY DETECTION SINGLE LAYER 
-    # for algorithm, parameters_list in single_layer_algorithm_dict.items():
-    #     for param_tuple in parameters_list:
-    #         if algorithm == 'louvain':
-    #             cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-    #         elif algorithm == 'infomap':
-    #             cda = CDAlgorithm("infomap")
+    # COMMUNITY DETECTION SINGLE LAYER 
+    for algorithm, parameters_list in single_layer_algorithm_dict.items():
+        for param_tuple in parameters_list:
+            if algorithm == 'louvain':
+                cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
+            elif algorithm == 'infomap':
+                cda = CDAlgorithm("infomap")
 
-    #         for co_action in co_action_list:
-    #             ca = CoAction(co_action, similarity_function)
-    #             list_ca = [CoAction(co_action, "tfidf_cosine_similarity")]
-    #             filter_instance = Filter("median", weight_th[co_action], Filter("merge_filter_action", nAction_th[co_action], None))
-    #             dict_ca_filter = {co_action: filter_instance}
-            
-    #             cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
-    #             cdm.compute_community_detection()
+            for co_action, filter_instance in dict_ca_filter3.items():
+                dict_ca_filter = {co_action: filter_instance}
+                cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
+                cdm.compute_community_detection()
                 
-    #             chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
-    #             chm.compute_statistics_communities()
-    #             chm.compute_metrics_communities(70)
-    #             chm.compute_node_metrics(metrics=metrics_node_to_compute)
-    #             chm.validate_communities()
-    #             chm.compute_coordination_communities()
+                chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
+                chm.compute_statistics_communities()
+                chm.compute_metrics_communities(70)
+                chm.compute_node_metrics(metrics=metrics_node_to_compute)
+                chm.validate_communities()
+                chm.compute_coordination_communities()
 
     # from input_config_IORussia import * # I have to re-import it because of the previous for loops, where I overwrite dict_ca_filter ---> dict_ca_filter = {co_action: filter_instance}
     # # MULTIMODAL COMMUNITY DETECTION AND CHARACTERIZATION
-    # for algorithm, parameters_list in parameters_dict.items():
-    #     for param_tuple in parameters_list:
-    #         cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-    #         cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
-    #         cdm.compute_community_detection()
+    for algorithm, parameters_list in parameters_dict.items():
+        for param_tuple in parameters_list:
+            cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
+            cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3, cda)
+            cdm.compute_community_detection()
             
-    #         chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
-    #         chm.compute_info_communities()
-    #         chm.compute_statistics_communities()
-    #         # chm.delete_edges_visualize_multiplex_network()
+            chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3, cda)
+            chm.compute_info_communities()
+            chm.compute_statistics_communities()
+            #  chm.delete_edges_visualize_multiplex_network()
 
-    #         chm.compute_node_metrics(metrics=metrics_node_to_compute) # Only for flattened algorithms, not for multilayer ones
-    #         chm.validate_communities() # for all algorithms except flat_and_weighted_sum_louvain, flat_and_weighted_sum_infomap
-    #         chm.compute_coordination_communities()
-
+            chm.compute_node_metrics(metrics=metrics_node_to_compute) # Only for flattened algorithms, not for multilayer ones
+            chm.validate_communities() # for all algorithms except flat_and_weighted_sum_louvain, flat_and_weighted_sum_infomap
+            chm.compute_coordination_communities()
+            chm.charactrize_url_layers_communities()
 
     # # OVERLAPPING COMMUNITIES
     # # multicoaction / flattened network vs single layer

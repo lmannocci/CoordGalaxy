@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 #          'location': str, 'botometer.is_bot': 'boolean', 'botometer.is_bot_english': 'boolean',
 #          'botometer.skipped': 'boolean', 'isBot': 'boolean', 'isBotEnglish': 'boolean', 'botSkipped': 'boolean',
 #          'reply': str, 'retweet': str, 'mention': str, 'hashtag': str, 'domainURL': str, 'source': str, 'target': str,
-#          'actor': str, 'node': str, 'nodeId': str}
+#          'actor': str, 'node': str, 'nodeId': str, 'text': str, 'content': str}
 
 # IORussia dataset
 dtype = {'postid': str, 'accountid': str, 'id': str, 'userId': str, 'reposted_accountid': str, 
          'reposted_postid': str, 'in_reply_to_accountid': str, 'in_reply_to_postid': str, 'post_text': str,
         'application_name': str, 'post_language': str, 'post_time': str, 'account_profile_description': str, 
          'account_creation_date': str, 'reply': str, 'retweet': str, 'mention': str, 'hashtag': str, 'domainURL': str, 'source': str, 'target': str,
-         'actor': str, 'node': str, 'nodeId': str}
+         'actor': str, 'node': str, 'nodeId': str, 'text': str, 'content': str}
 
 level = {
             "InputManager": -1,
@@ -30,19 +30,21 @@ level = {
 
 available_type_filter = ['top_co_action_original', 'top_co_action_merge_original', 'top_co_action', 'top_co_action_merge', 'most_active_users', 'top_tweeters', 'top_retweeters']
 
-available_co_action = {"co-retweet": ['overlapping', "overlapping_coefficient", "tfidf_cosine_similarity"],
-                       "co-reply": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"],
-                       "co-url-domain": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"],
-                       "co-mention": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"],
-                       "co-hashtag": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"]}
+available_co_action = {"co-comment": ['overlapping', "overlapping_coefficient", "tfidf_cosine_similarity"],
+                       "co-commentText": ['average_cosine_similarity', 'overlapping_coefficient', 'overlapping'],
+                       "co-commentURL": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"],
+                       "co-postText": ['average_cosine_similarity', 'overlapping_coefficient', 'overlapping'],
+                       "co-postURL": ['overlapping', "overlapping_coefficient","tfidf_cosine_similarity"]}
 
-
+co_action_embeddings = ["co-commentText", "co-postText"]
 
 sparse_computation_function = ["tfidf_cosine_similarity"]
 
 dense_computation_function = ["overlapping",
                               "overlapping_coefficient",
                               "tfidf_cosine_similarity"]
+
+irrelevant_sparse_computation_function = ["average_cosine_similarity"]
 
 available_type_merge = ["sum", "average"]
 
@@ -110,26 +112,29 @@ camparison_map = {
 }
 
 # color_dict = {"co-retweet": "#e41a1c", "co-reply": "#377eb8", "co-url-domain": "#4daf4a", "co-mention": "#984ea3", "co-hashtag": "#ff7f00"}
-co_action_column = {"co-retweet": "retweet", "co-reply": "reply", "co-url-domain": "domainUrl", "co-mention": "mention", "co-hashtag": "hashtag"}
+co_action_column = {"co-comment": "comment", "co-commentText": "text", "co-commentURL": "domainUrl", "co-postText": "text", "co-postURL": "domainUrl"}
 
-co_action_column_print = {"co-retweet": "RTW", "co-reply": "RPL", "co-url-domain": "URL", "co-mention": "MEN", "co-hashtag": "HST"}
-co_action_column_print2 = {"retweet": "RTW", "reply": "RPL", "URL": "URL", "mention": "MEN", "hashtag": "HST"}
-co_action_column_print3 = {"co-retweet": "RTW", "co-reply": "RPL", "co-URL": "URL", "co-mention": "MEN", "co-hashtag": "HST"}
+co_action_column_print = {"co-comment": "CMT", "co-commentText": "CTXT", "co-commentURL": "CURL", "co-postText": "PTXT", "co-postURL": "PURL"}
+co_action_column_print2 = {"comment": "CMT", "commentText": "CTXT", "commentURL": "CURL", "postText": "PTXT", "postURL": "PURL"}
+co_action_column_print3 = {"co-comment": "CMT", "co-commentText": "CTXT", "co-commentURL": "CURL", "co-postText": "PTXT", "co-postURL": "PURL",
+                          "comment": "CMT", "commentText": "CTXT", "commentURL": "CURL", "postText": "PTXT", "postURL": "PURL"}
+
 multimodal_print = {'multimodal': "MUL", "flat_nw_louvain": "UNFL (nw)", "flat_ec_louvain": "UNFL (ec)", "flat_weighted_sum_louvain": "UNFL (sum)",
-                    "flat_weighted_average_louvain": "UNFL (avg)", "flat_and_weighted_sum_louvain": "UNFL (and sum)",
-                    
+                    "flat_weighted_average_louvain": "UNFL (avg)", "flat_and_weighted_sum_louvain": "UNFL (and sum)",                    
                     "flat_nw_infomap": "UNFL (nw)", "flat_ec_infomap": "UNFL (ec)", "flat_weighted_sum_infomap": "UNFL (sum)",
                     "flat_weighted_average_infomap": "UNFL (avg)", "flat_and_weighted_sum_infomap": "UNFL (and sum)"}
 
-co_action_map = {"co-retweet": "co-retweet", "co-reply": "co-reply", "co-url-domain": "co-URL", "co-mention": "co-mention", "co-hashtag": "co-hashtag"}
-action_map = {"co-retweet": "retweet", "co-reply": "reply", "co-url-domain": "URL", "co-mention": "mention", "co-hashtag": "hashtag"}
-action_map_inverse = {"retweet": "co-retweet", "reply": "co-reply", "URL": "co-url-domain", "mention": "co-mention", "hashtag": "co-hashtag"}
-action_map_inverse_print = {"retweet": "co-retweet", "reply": "co-reply", "URL": "co-URL", "mention": "co-mention", "hashtag": "co-hashtag"}
-url_map = {'co-url-domain': 'co-URL'}
+co_action_map = {"co-comment": "comment", "co-commentText": "commentText", "co-commentURL": "commentURL", "co-postText": "postText", "co-postURL": "postURL"}
+action_map = {"co-comment": "comment", "co-commentText": "commentText", "co-commentURL": "commentURL", "co-postText": "postText", "co-postURL": "postURL"}
+action_map_inverse = {"comment": "co-comment", "commentText": "co-commentText", "commentURL": "co-commentURL", "postText": "co-postText", "postURL": "co-postURL"}
+action_map_inverse_print = {"comment": "co-comment", "commentText": "co-commentText", "commentURL": "co-commentURL", "postText": "co-postText", "postURL":"co-postURL"}
+
 
 # abbreviation
-co_action_abbreviation_map = {"co-retweet": "rt", "co-reply": "rp", "co-url-domain": "ud", "co-hashtag": "h", "co-mention": "m"}
-similarity_function_map = {"overlapping": "o", "overlapping_coefficient": "oc", "tfidf_cosine_similarity": "tics"}
+co_action_abbreviation_map = {"co-comment": "c", "co-commentText": "ct", "co-commentURL": "cu", "co-postText": "pt", "co-postURL": "pu"}
+
+similarity_function_map = {"overlapping": "o", "overlapping_coefficient": "oc", "tfidf_cosine_similarity": "tics", "average_cosine_similarity": "acs"}
+
 filter_map = {'low_std': "ls", 'mean': "m", 'high_std': "hs", 'th': "th", 'median': 'md', 'filter_merge_action': "fma",
               'merge_filter_action': 'mfa', "backbone": "b", "node_topEdge": "nte"}
 algorithm_map = {'louvain': 'l', "clique_percolation": "cp", 'infomap': "im", 'glouvain': "gl", 'abacus': "a",
@@ -151,16 +156,14 @@ palette = {'lost': pastel_palette[3],  # common: blue, gained: green, lost: red
             'common': pastel_palette[0],
            'gained': pastel_palette[2]}
 
-color_dict = {"co-retweet": pastel_palette[0],
-              "co-reply": pastel_palette[1],
-              "co-url-domain": pastel_palette[2],
-              "co-mention": pastel_palette[3],
-              "co-hashtag": pastel_palette[5]}
-color_dict2 = {"RTW": pastel_palette[0],
-              "RPL": pastel_palette[1],
-              "URL": pastel_palette[2],
-              "MEN": pastel_palette[3],
-              "HST": pastel_palette[5]}
 
-
-
+color_dict = {"co-comment": pastel_palette[0],
+              "co-commentText": pastel_palette[1],
+              "co-commentURL": pastel_palette[2],
+              "co-postText": pastel_palette[3],
+              "co-postURL": pastel_palette[5]}
+color_dict2 = {"CMT": pastel_palette[0],
+              "CTXT": pastel_palette[1],
+              "CURL": pastel_palette[2],
+              "PTXT": pastel_palette[3],
+              "PURL": pastel_palette[5]}

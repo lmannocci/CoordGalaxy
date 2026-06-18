@@ -3,6 +3,7 @@ from DirectoryManager import DirectoryManager
 from utils.Checkpoint.Checkpoint import *
 from utils.PlotManager.PlotManager import *
 from SimilarityFunctionManager.methods.similarityFunction import *
+from utils.decorator_definition import *
 
 from itertools import combinations
 import matplotlib.pyplot as plt
@@ -119,7 +120,7 @@ class SelectionUserManager:
 
         self.lm.printl(f"{file_name}: __save_info_dataset completed.")
 
-
+    @log_method
     def filter_users(self, filter_dataset, save_dataset=True, save_info=False):
         """
             Given a dataframe of posts published by several users, it gets posts by the top user_fraction of top retweeters.
@@ -144,8 +145,10 @@ class SelectionUserManager:
              on the dataset, you can set it to True.
             :return: [DataFrame] Return a pandas DataFrame with posts of the most active users.
         """
-        self.lm.printl(f"{file_name}: filter_users start.")
 
+        # TODO: Add the filtering for th npy files, in case of co-actions with similarity, e.g., co-commentText, co-postText.
+        # Indeed, for these co-actions, we have a npy file with the similarity between posts, and we need to filter this file as well, 
+        # to keep only the similarity between posts of the most active users.
         dict_df = {}
 
         # dict_df["df_retweet"] = df_all[df_all['retweetId'].isnull() == False]
@@ -153,31 +156,14 @@ class SelectionUserManager:
         for co_action in self.co_action_list:
             self.lm.printl(f"{file_name}: Reading dataframe for co-action {co_action}.")
             suffix = "filtered" if filter_dataset[co_action] == True else ""
-            path_df = f"{self.dm.path_dataset}2_{self.dataset_name}_normalized_{action_map[co_action]}{suffix}.csv"
+            path_df = f"{self.dm.path_dataset}2_{self.dataset_name}_{action_map[co_action]}{suffix}.csv"
             dict_df[co_action] = self.ch.read_dataframe(path_df, dtype=dtype)
-
-        # if co_action == 'co-retweet':
-        #         dict_df["co-retweet"] = self.ch.read_dataframe(f"{self.dm.path_dataset}2_uk_normalized_retweet.csv", dtype=dtype)
-        #     elif co_action == 'co-reply':
-        #         dict_df["co-reply"] = self.ch.read_dataframe(f"{self.dm.path_dataset}2_uk_normalized_reply.csv", dtype=dtype)
-        #     elif co_action == 'co-url-domain':
-        #         dict_df["co-url-domain"] = self.ch.read_dataframe(f"{self.dm.path_dataset}2_uk_normalized_url{suffix}.csv", dtype=dtype)
-        #     elif co_action == 'co-mention':
-        #         dict_df[co_action"] = self.ch.read_dataframe(f"{self.dm.path_dataset}2_{self.dataset_name}_normalized_{action_map[co_action]}{suffix}.csv", dtype=dtype)
-        #     elif co_action == 'co-hashtag':
-        #         dict_df["co-hashtag"] = self.ch.read_dataframe(f"{self.dm.path_dataset}2_uk_normalized_hashtag{suffix}.csv", dtype=dtype)
 
         # with this filter, only original tweets are considered for co-actions url, mention and hashtag
         if self.type_filter == 'top_co_action_original' or self.type_filter == 'top_co_action_merge_original':
             for co_action in self.co_action_list:
                 if co_action in ['co-url-domain', 'co-mention', 'co-hashtag']:
                     dict_df[co_action] = dict_df[co_action][dict_df[co_action]['type'] == 'original']
-                # if co_action == 'co-url-domain':
-                #     dict_df["co-url-domain"] = dict_df["co-url-domain"][dict_df["co-url-domain"]['type'] == 'original']
-                # if co_action == 'co-mention':
-                #     dict_df["co-mention"] = dict_df["co-mention"][dict_df["co-mention"]['type'] == 'original']
-                # if co_action == 'co-hashtag':
-                #     dict_df["co-hashtag"] = dict_df["co-hashtag"][dict_df["co-hashtag"]['type'] == 'original']
 
         if self.type_filter == "top_co_action":
             top_users_dict = {}  # list of dataframes, containing only userId column

@@ -9,6 +9,7 @@ from utils.common_variables import *
 from utils.Checkpoint.Checkpoint import *
 from utils.ConversionManager.ConversionManager import *
 from utils.PlotManager.PlotManager import *
+from utils.decorator_definition import *
 
 import uunet.multinet as ml
 import os
@@ -29,6 +30,7 @@ class MultiplexCommunitiesEvaluation:
         self.cm = ConversionManager()
 
         self.dataset_name = dataset_name
+        self.data_path = f"{data_path}{self.dataset_name}{os.sep}"
         self.user_fraction = user_fraction
         self.type_filter = type_filter
 
@@ -44,33 +46,68 @@ class MultiplexCommunitiesEvaluation:
         self.pm = PlotManager()
         self.ce = CommunitiesEvaluation(self.lm)
 
+    @log_method
     def compute_info_communities(self):
-        self.lm.printl(f"{file_name}. compute_info_communities start.")
-        graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]
-        net_filename = graph_files[0]
-        com_df = self.ch.read_dataframe(self.dm.path_user_dataframe + net_filename, dtype=dtype)
+        """
+        Compute info about communities per layer and per community, such as number of actors, number of layers, etc."""
+        graph_files = [
+            pos_csv
+            for pos_csv in os.listdir(self.dm.path_user_dataframe)
+            if pos_csv.endswith('.csv')
+        ]
 
+        net_filename = graph_files[0]
+
+        com_df = self.ch.read_dataframe(
+            self.dm.path_user_dataframe + net_filename,
+            dtype=dtype
+        )
+
+        # -----------------------------
+        # INFO PER LAYER
+        # -----------------------------
         layer_df = com_df.groupby('layer').agg(
+            numActorLayer=('actor', 'count'),
             numActors=('actor', 'nunique'),
             numCommunities=('cid', 'nunique')
         ).reset_index()
 
+        # -----------------------------
+        # INFO PER COMMUNITY
+        # -----------------------------
         community_df = com_df.groupby('cid').agg(
+            numActorLayer=('actor', 'count'),
             numActors=('actor', 'nunique'),
             numLayers=('layer', 'nunique')
         ).reset_index()
 
-
+        # -----------------------------
+        # ADD METADATA
+        # -----------------------------
         community_df['algorithm'] = self.cda.get_algorithm_name()
         layer_df["algorithm"] = self.cda.get_algorithm_name()
+
         for key, value in self.cda.get_parameters().items():
             community_df[key] = value
             layer_df[key] = value
 
-        self.ch.update_dataframe(community_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_info_cda_per_community.csv", dtype)
-        self.ch.update_dataframe(layer_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_info_cda_per_layer.csv", dtype=dtype)
+        # -----------------------------
+        # SAVE
+        # -----------------------------
+        self.ch.update_dataframe(
+            community_df,
+            self.dm.path_community_analysis +
+            f"{self.cda.get_algorithm_name()}_info_cda_per_community.csv",
+            dtype
+        )
 
-        self.lm.printl(f"{file_name}. compute_info_communities completed.")
+        self.ch.update_dataframe(
+            layer_df,
+            self.dm.path_community_analysis +
+            f"{self.cda.get_algorithm_name()}_info_cda_per_layer.csv",
+            dtype=dtype
+        )
+
 
     # ------------------------------------------------------------------------------------------------------------------
     def __compute_community_weight_stats(self, df, networkx_graphs, weight_label):
@@ -343,6 +380,118 @@ class MultiplexCommunitiesEvaluation:
             th_str = ""
         self.ch.save_dataframe(stats_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}{th_str}_coordination_communities.csv")
         self.lm.printl(f"{file_name}. compute_coordination_communities completed.")
+
+    @log_method
+    def charactrize_url_layers_communities(self, top_n=10):
+        """
+        Analyze URL behavior of top multiplex communities.
+        """
+        com_df_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]
+        com_df_filename = com_df_files[0]
+        com_df = self.ch.read_dataframe(self.dm.path_user_dataframe + com_df_filename, dtype=dtype)
+        post_url = self.ch.read_dataframe(f"{self.data_path}{self.dataset_name}_postURL.csv", dtype=dtype)
+        comment_url = self.ch.read_dataframe(f"{self.data_path}{self.dataset_name}_commentURL.csv", dtype=dtype)
+
+        coord_com = self.ch.read_dataframe(f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_coordination_communities.csv", dtype=dtype)
+        info_per_com = self.ch.read_dataframe(f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_info_cda_per_community.csv", dtype=dtype)
+        
+         # ---------------------------------
+        # TOP COMMUNITIES
+        # ---------------------------------
+        merged_df = info_per_com.merge(coord_com,left_on="cid",right_on="community")
+        merged_df = merged_df[['cid', 'numActorLayer', 'numActors', 'numLayers', 'avg_weight', 'median_weight', 'std_weight']]
+        merged_df = merged_df.sort_values('numActorLayer', ascending=False)
+        top_merged_df = merged_df.head(top_n).round(3)
+        self.ch.save_dataframe(top_merged_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_top_{top_n}_communities_summary.csv", dtype=dtype)
+       
+        top_cids = top_merged_df['cid'].tolist()
+
+        results = {}
+
+        # ---------------------------------
+        # LOOP COMMUNITIES
+        # ---------------------------------
+        for cid in top_cids:
+
+            # -----------------------------
+            # COMMUNITY MEMBERS
+            # -----------------------------
+            community_df = com_df[com_df["cid"] == cid]
+
+            actors = community_df["actor"].unique()
+
+            # -----------------------------
+            # FILTER URL DATA
+            # -----------------------------
+            post_url_com = post_url[
+                post_url["userId"].isin(actors)
+            ].copy()
+
+            comment_url_com = comment_url[
+                comment_url["userId"].isin(actors)
+            ].copy()
+
+            # -----------------------------
+            # DOMAIN FREQUENCIES
+            # -----------------------------
+            post_domain_freq = (
+                post_url_com["domainUrl"]
+                .value_counts()
+                .head(20)
+            )
+
+            comment_domain_freq = (
+                comment_url_com["domainUrl"]
+                .value_counts()
+                .head(20)
+            )
+
+            all_url_com = pd.concat([
+                post_url_com,
+                comment_url_com
+            ])
+
+            total_domain_freq = (
+                all_url_com["domainUrl"]
+                .value_counts()
+                .head(20)
+            )
+
+            # -----------------------------
+            # LAYER DISTRIBUTION
+            # -----------------------------
+            layer_distribution = (
+                community_df["layer"]
+                .value_counts()
+                .to_dict()
+            )
+
+            # -----------------------------
+            # COMMUNITY STATS
+            # -----------------------------
+            stats = (
+                merged_df[
+                    merged_df["cid"] == cid
+                ]
+                .iloc[0]
+                .to_dict()
+            )
+
+            # -----------------------------
+            # SAVE RESULTS
+            # -----------------------------
+            results[cid] = {
+                "stats": stats,
+                "num_unique_actors": community_df["actor"].nunique(),
+                "num_actor_layer": len(community_df),
+                "layer_distribution": layer_distribution,
+                "top_post_domains": post_domain_freq,
+                "top_comment_domains": comment_domain_freq,
+                "top_domains_overall": total_domain_freq
+            }
+
+        return results
+
 
     # def compute_ML_intra_inter_edge(self):
     #     graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]

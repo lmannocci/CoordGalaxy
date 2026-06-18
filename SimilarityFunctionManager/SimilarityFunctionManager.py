@@ -5,6 +5,7 @@ from utils.ConversionManager.ConversionManager import *
 from utils.Checkpoint.Checkpoint import *
 from MergeNetworkManager import MergeNetworkManager
 from Objects.TimeWindow.TimeWindow import *
+from utils.decorator_definition import *
 
 from multiprocessing import Pool, Manager
 from functools import partial
@@ -16,7 +17,8 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from typing import Optional
+import glob
 
 absolute_path = os.path.dirname(__file__)
 file_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -25,7 +27,9 @@ results = os.path.join(absolute_path, f"..{os.sep}results{os.sep}")
 
 
 class SimilarityFunctionManager:
-    def __init__(self, dataset_name, user_fraction, type_filter, tw: TimeWindow, ca, sparse_computation=False, save_info=False,
+
+    def __init__(self, dataset_name, user_fraction, type_filter, tw: TimeWindow, ca, text_similarity_threshold: Optional[float] = None,
+                 sparse_computation=False, save_info=False,
                  parallelize_window=False, parallelize_similarity=False):
         """
             :param ch: [Checkpoint] Checkpoint instance to save object.
@@ -50,6 +54,7 @@ class SimilarityFunctionManager:
         self.type_filter = type_filter
         self.tw = tw
         self.ca = ca
+        self.text_similarity_threshold = text_similarity_threshold
         self.sparse_computation = sparse_computation
         self.save_info = save_info  # if sparse_computation = True, save_info not implemented
         self.__set_parallelize_window(parallelize_window)
@@ -191,6 +196,7 @@ class SimilarityFunctionManager:
         else:
             return None
 
+    @log_method
     def __computing_time_window_similarity(self, df):
         """
             Compute the edge list for all the time windows, launching on thread for each window.
@@ -224,8 +230,6 @@ class SimilarityFunctionManager:
             #         # info_edge_list implemented only for overlapping measure
             #         self.merge_info_edge_list()
 
-        self.lm.printl(f"{file_name}. __computing_time_window_similarity completed.")
-
     def window_edge_list(self, window, shared_counter):
         """
             Compute the edge list for the given time window.
@@ -242,10 +246,14 @@ class SimilarityFunctionManager:
         end_date = window[3]
         df = window[4]
 
-        self.lm.printl(f"""{file_name}. window_edge_list start computing edge lists for window {start_date}_{end_date}.
+        # Increment the shared counter by 1
+        # with shared_counter.get_lock():  # Locking to ensure safe update
+        shared_counter.value += 1
+
+        self.lm.printl(f"""START window_edge_list: {str(shared_counter.value)}/{str(self.n_windows)}.
+                       Range: {start_date}_{end_date}.
                        Number of {action_map[self.ca.get_co_action()]}: {str(df.shape[0])}
-                       Number of users {str(df['userId'].nunique())}
-                       """)
+                       Number of users {str(df['userId'].nunique())}""")
 
         if df.shape[0] > 0:
             # name of the file of the edge list
@@ -255,75 +263,139 @@ class SimilarityFunctionManager:
             # get the column name in the dataframe (c) and the action name, which is used for pretty plot and print
             c = co_action_column[self.ca.get_co_action()]
 
-            # extract the set of retweet for each user.
-            co_action_df = df.groupby("userId")[c].apply(set).reset_index()
-            userIds = co_action_df["userId"].values.tolist()
+            
+            # -----------------------------
+            # NEW BRANCH: text embeddings
+            # -----------------------------
+            if self.ca.get_co_action() in co_action_embeddings: # ["co-commentText", "co-postText"]
+                # Assumption:
+                # df contains:
+                # - id: comment/post id
+                # - userId
+                # - row_idx: original row index aligned with self.text_embeddings
+                #
+                # self.text_embeddings is a numpy array loaded once, shape (n_rows, dim)
 
-            edge_list = []
-            if self.sparse_computation:
-                if self.ca.get_similarity_function() == "tfidf_cosine_similarity":
-                    tfidf_matrix = self.__tf_idf(co_action_df, c)
-                    sim_matrix = cosine_similarity(tfidf_matrix, dense_output=False)
+                text_df = df[["userId", "id", "row_idx"]].copy()
 
-                    # Get the upper triangular indices (sim_matrix is symmetric)
-                    upper_tri_indices = np.triu_indices(sim_matrix.shape[0], k=1)
+                # one row per user -> list of (comment_id, row_idx)
+                co_action_df = (
+                    text_df.groupby("userId")
+                    .apply(lambda g: list(zip(g["id"].tolist(), g["row_idx"].tolist())))
+                    .reset_index(name="comments")
+                )
 
-                    # Create a list of tuples (userId1, userId2, similarity)
-                    edge_list = []
-                    for i, j in zip(*upper_tri_indices):
-                        sim = sim_matrix[i, j]
-                        if sim > 0:
-                            edge_list.append((userIds[i], userIds[j], sim, None))
-            else:
-                co_action_sets = []
-                if self.ca.get_similarity_function() == "tfidf_cosine_similarity":
-                    tfidf_matrix = self.__tf_idf(co_action_df, c)
-                    # convert the sparse matrix of tf-idf vectors to an array (n_users, n_features), where the n_features is the number of
-                    # different retweetIds (for example), i.e., the corresponding of a term in a document.
-                    mat = tfidf_matrix.toarray()
-
-                    # (781597, {'1194046521622306817', '1194041159884181504'}),
-                    # list_user_sets = list(co_action_df.to_records(index=False))
-                    list_user_sets = list(co_action_df[c].values)
-
-                    # List of tuples:
-                    # 0) userId 781597
-                    # 1) set of action {'1194046521622306817', '1194041159884181504'}
-                    # 2) tf-idf vector of the user array([0, 0.05])
-                    co_action_sets = list(zip(userIds, list_user_sets, mat))
-                elif self.ca.get_similarity_function() == "overlapping_coefficient" or self.ca.get_similarity_function() == "overlapping":
-                    # example of co_action_sets. Tuple where the first element is the userId and the second one is the set of the user
-                    # (781597, {'1194046521622306817', '1194041159884181504'}),
-                    #  (1588291, {'1193888404343275521', '1193968350793216008'}),
-                    co_action_sets = list(co_action_df.to_records(index=False))
+                # tuples: (userId, [(comment_id, row_idx), ...])
+                co_action_sets = list(co_action_df.to_records(index=False))
 
                 if not self.parallelize_similarity:
-                    edge_list, info_edge_list_df = self.__extract_edge_list(combinations(co_action_sets, 2))
+                    self.lm.printl(f"Text embeddings similarity without parallelization on similarity.")
+                    edge_list, info_edge_list_df = self.__extract_edge_list_text(combinations(co_action_sets, 2))
                 else:
-                    # Parallelize using multiprocessing
                     with Pool() as pool:
-                        results_pool = pool.map(self.__parallelized_extract_edge_list, combinations(co_action_sets, 2))
+                        results_pool = pool.map(
+                            self.__parallelized_extract_edge_list_text,
+                            combinations(co_action_sets, 2)
+                        )
 
                     edge_list = []
-                    intersection_list = []
+                    comment_id_1_list = []
+                    comment_id_2_list = []
                     userId_list1 = []
                     userId_list2 = []
-                    # Process the results
+
                     for result in results_pool:
                         if result is not None:
-                            userId1, userId2, sim, nCommonAction, intersection = result
-                            edge_list.append((userId1, userId2, sim, nCommonAction))
+                            userId1, userId2, avg_sim, n_similar_texts, matched_pairs = result
+                            edge_list.append((userId1, userId2, avg_sim, n_similar_texts))
 
                             if self.save_info:
-                                intersection_list.extend(intersection)
-                                temp_list1 = [userId1] * len(intersection)
-                                temp_list2 = [userId2] * len(intersection)
-                                userId_list1.extend(temp_list1)
-                                userId_list2.extend(temp_list2)
-                    if self.save_info:
-                        info_edge_list_df = pd.DataFrame(
-                            {NODE1_VAR: userId_list1, NODE2_VAR: userId_list2, 'id': intersection_list})
+                                for comment_id_1, comment_id_2 in matched_pairs:
+                                    userId_list1.append(userId1)
+                                    userId_list2.append(userId2)
+                                    comment_id_1_list.append(comment_id_1)
+                                    comment_id_2_list.append(comment_id_2)
 
+                    if self.save_info:
+                        info_edge_list_df = pd.DataFrame({
+                            NODE1_VAR: userId_list1,
+                            NODE2_VAR: userId_list2,
+                            "id_1": comment_id_1_list,
+                            "id_2": comment_id_2_list
+                        })
+
+            # -----------------------------
+            # OLD BRANCH: ids / sets
+            # -----------------------------
+            else:
+                # extract the set of retweet for each user.
+                co_action_df = df.groupby("userId")[c].apply(set).reset_index()
+                userIds = co_action_df["userId"].values.tolist()
+
+                edge_list = []
+                if self.sparse_computation:
+                    if self.ca.get_similarity_function() == "tfidf_cosine_similarity":
+                        tfidf_matrix = self.__tf_idf(co_action_df, c)
+                        sim_matrix = cosine_similarity(tfidf_matrix, dense_output=False)
+
+                        # Get the upper triangular indices (sim_matrix is symmetric)
+                        upper_tri_indices = np.triu_indices(sim_matrix.shape[0], k=1)
+
+                        # Create a list of tuples (userId1, userId2, similarity)
+                        edge_list = []
+                        for i, j in zip(*upper_tri_indices):
+                            sim = sim_matrix[i, j]
+                            if sim > 0:
+                                edge_list.append((userIds[i], userIds[j], sim, None))
+                else:
+                    co_action_sets = []
+                    if self.ca.get_similarity_function() == "tfidf_cosine_similarity":
+                        tfidf_matrix = self.__tf_idf(co_action_df, c)
+                        # convert the sparse matrix of tf-idf vectors to an array (n_users, n_features), where the n_features is the number of
+                        # different retweetIds (for example), i.e., the corresponding of a term in a document.
+                        mat = tfidf_matrix.toarray()
+
+                        # (781597, {'1194046521622306817', '1194041159884181504'}),
+                        # list_user_sets = list(co_action_df.to_records(index=False))
+                        list_user_sets = list(co_action_df[c].values)
+
+                        # List of tuples:
+                        # 0) userId 781597
+                        # 1) set of action {'1194046521622306817', '1194041159884181504'}
+                        # 2) tf-idf vector of the user array([0, 0.05])
+                        co_action_sets = list(zip(userIds, list_user_sets, mat))
+                    elif self.ca.get_similarity_function() == "overlapping_coefficient" or self.ca.get_similarity_function() == "overlapping":
+                        # example of co_action_sets. Tuple where the first element is the userId and the second one is the set of the user
+                        # (781597, {'1194046521622306817', '1194041159884181504'}),
+                        #  (1588291, {'1193888404343275521', '1193968350793216008'}),
+                        co_action_sets = list(co_action_df.to_records(index=False))
+
+                    if not self.parallelize_similarity:
+                        edge_list, info_edge_list_df = self.__extract_edge_list(combinations(co_action_sets, 2))
+                    else:
+                        # Parallelize using multiprocessing
+                        with Pool() as pool:
+                            results_pool = pool.map(self.__parallelized_extract_edge_list, combinations(co_action_sets, 2))
+
+                        edge_list = []
+                        intersection_list = []
+                        userId_list1 = []
+                        userId_list2 = []
+                        # Process the results
+                        for result in results_pool:
+                            if result is not None:
+                                userId1, userId2, sim, nCommonAction, intersection = result
+                                edge_list.append((userId1, userId2, sim, nCommonAction))
+
+                                if self.save_info:
+                                    intersection_list.extend(intersection)
+                                    temp_list1 = [userId1] * len(intersection)
+                                    temp_list2 = [userId2] * len(intersection)
+                                    userId_list1.extend(temp_list1)
+                                    userId_list2.extend(temp_list2)
+                        if self.save_info:
+                            info_edge_list_df = pd.DataFrame(
+                                {NODE1_VAR: userId_list1, NODE2_VAR: userId_list2, 'id': intersection_list})
             # save edge_list
             self.ch.save_object(edge_list, self.dm.path_edge_list_temporal + filename)
 
@@ -331,15 +403,15 @@ class SimilarityFunctionManager:
             if self.save_info:
                 # filename is in format startDate_endDate.p, it is a pickle format
                 info_edge_list_df.to_csv(self.dm.path_info_edge_list_temporal + filename.split('.')[0] + '.csv',
-                                         index=False)
+                                        index=False)
         else:
             edge_list = []
 
-        # Increment the shared counter by 1
-        # with shared_counter.get_lock():  # Locking to ensure safe update
-        shared_counter.value += 1
-        self.lm.printl(f"""{file_name}. window_edge_list {str(shared_counter.value)}/{str(self.n_windows)}.
-                       Completed {start_date}_{end_date}. Number of edges: {str(len(edge_list))}.""")
+        
+        self.lm.printl(f"""Range: {start_date}_{end_date}. 
+                       Number of edges: {str(len(edge_list))}.
+                       COMPLETED window_edge_list {str(shared_counter.value)}/{str(self.n_windows)}.
+                       """)
 
         return start_date, end_date
 
@@ -349,8 +421,12 @@ class SimilarityFunctionManager:
             :param df: [DataFrame] Pandas dataframe to be filtered according to the co-action type.
             :return: [DataFrame] Filtered pandas dataframe, according to the co-action type.
         """
+        if self.user_fraction is not None:
+            prefix = f"{self.user_fraction}_{self.type_filter}_"
+        else:
+            prefix = ""
         ca_type = self.ca.get_co_action()
-        df = self.ch.read_dataframe(f"{self.dm.path_dataset}{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{ca_type}.csv", dtype)
+        df = self.ch.read_dataframe(f"{self.dm.path_dataset}{prefix}{self.dataset_name}_{co_action_map[ca_type]}.csv", dtype)
         if co_action_column[ca_type] not in df.columns:
             m = f"{co_action_column[ca_type]} column is not among the columns of the dataframe."
             self.lm.printl(m)
@@ -358,16 +434,182 @@ class SimilarityFunctionManager:
 
         # Remove null values
         df = df[df[co_action_column[ca_type]].isnull() == False]
+
+        df = df.reset_index(drop=True)
+
+        if ca_type in co_action_embeddings:
+            embedding = self.ch.load_object(f"{self.dm.path_dataset}{prefix}{self.dataset_name}_{co_action_map[ca_type]}.npy")
+
+            if len(df) != len(embedding):
+                m = (
+                    f"Mismatch between filtered dataframe rows ({len(df)}) "
+                    f"and embedding rows ({len(embedding)})."
+                )
+                self.lm.printl(m)
+                raise ValueError(m)
+
+            # Keep only a row index in the dataframe
+            df["row_idx"] = np.arange(len(df), dtype=np.int64)
+
+            # Store embeddings outside the dataframe
+            self.text_embeddings = np.asarray(embedding, dtype=np.float32)
+
         return df
+    
+    @log_method
+    def __extract_edge_list_text(self, combinations_sets):
+        """
+        Text-based user-user network inside one window.
+
+        Input tuples are:
+        (userId, [(comment_id, row_idx), ...])
+
+        self.text_embeddings[row_idx] must return the embedding vector for that comment.
+
+        Output edge format:
+        (userId1, userId2, avg_text_similarity, n_similar_texts)
+        """
+        edge_list = []
+        comment_id_1_list = []
+        comment_id_2_list = []
+        userId_list1 = []
+        userId_list2 = []
+
+        for user_tuple1, user_tuple2 in combinations_sets:
+            userId1 = user_tuple1[0]
+            userId2 = user_tuple2[0]
+
+            comments1 = user_tuple1[1]   # list of (comment_id, row_idx)
+            comments2 = user_tuple2[1]
+
+            matched_pairs = []
+            sim_values = []
+
+            for comment_id_1, row_idx_1 in comments1:
+                v1 = self.text_embeddings[row_idx_1]
+
+                for comment_id_2, row_idx_2 in comments2:
+                    v2 = self.text_embeddings[row_idx_2]
+
+                    # if embeddings are already normalized, dot product is enough
+                    sim = float(np.dot(v1, v2))
+                    # self.lm.printl(f"[DEBUG] Similarity: {sim}")
+                    # otherwise use cosine:
+                    # sim = my_cosine_similarity(v1.reshape(1, -1), v2.reshape(1, -1))
+
+                    if sim >= self.text_similarity_threshold:
+                        matched_pairs.append((comment_id_1, comment_id_2))
+                        sim_values.append(sim)
+
+            n_similar_texts = len(sim_values)
+
+            if n_similar_texts > 0:
+                avg_sim = float(np.mean(sim_values))
+                edge_list.append((userId1, userId2, avg_sim, n_similar_texts))
+
+                if self.save_info:
+                    for comment_id_1, comment_id_2 in matched_pairs:
+                        userId_list1.append(userId1)
+                        userId_list2.append(userId2)
+                        comment_id_1_list.append(comment_id_1)
+                        comment_id_2_list.append(comment_id_2)
+
+        if self.save_info:
+            info_edge_list_df = pd.DataFrame({
+                NODE1_VAR: userId_list1,
+                NODE2_VAR: userId_list2,
+                "id_1": comment_id_1_list,
+                "id_2": comment_id_2_list
+            })
+        else:
+            info_edge_list_df = pd.DataFrame()
+
+        return edge_list, info_edge_list_df
+
+    def __parallelized_extract_edge_list_text(self, tuples):
+        user_tuple1, user_tuple2 = tuples
+
+        userId1 = user_tuple1[0]
+        userId2 = user_tuple2[0]
+
+        comments1 = user_tuple1[1]
+        comments2 = user_tuple2[1]
+
+        matched_pairs = []
+        sim_values = []
+
+        for comment_id_1, row_idx_1 in comments1:
+            v1 = self.text_embeddings[row_idx_1]
+
+            for comment_id_2, row_idx_2 in comments2:
+                v2 = self.text_embeddings[row_idx_2]
+
+                sim = float(np.dot(v1, v2))
+
+                if sim >= self.text_similarity_threshold:
+                    matched_pairs.append((comment_id_1, comment_id_2))
+                    sim_values.append(sim)
+
+        n_similar_texts = len(sim_values)
+
+        if n_similar_texts > 0:
+            avg_sim = float(np.mean(sim_values))
+            return userId1, userId2, avg_sim, n_similar_texts, matched_pairs
+        else:
+            return None
+
+
+    # PATH METHODS
+    def _replace_dash_in_edge_list(self, edge_list):
+        """
+        Replace '-' with '_' in the first two elements
+        of each edge tuple.
+        """
+
+        return [
+            (
+                str(userId1).replace("-", "_"),
+                str(userId2).replace("-", "_"),
+                *rest
+            )
+            for userId1, userId2, *rest in edge_list
+        ]
+
+
+    def _process_csv_directory(self, directory_path):
+        """
+        Read all CSV files in a directory, replace '-' with '_'
+        in userId columns, and overwrite the original files.
+
+        Parameters
+        ----------
+        directory_path : str
+            Path to directory containing CSV files.
+        """
+        pickle_files = glob.glob(os.path.join(directory_path, "*.p"))
+
+        self.lm.printl(f"Found {len(pickle_files)} pickle files.")
+
+        for i, file_path in enumerate(pickle_files, start=1):
+            self.lm.printl(f"[{i}/{len(pickle_files)}] Processing: {os.path.basename(file_path)}")
+
+            edge_list = self.ch.load_object(file_path)
+            # updated_edge_list = self._replace_dash_in_edge_list(edge_list)
+            cm = ConversionManager()
+            updated_edge_list = cm.convert_edge_list(edge_list, direction="compress")
+
+            # Overwrite same file
+            self.ch.save_object(updated_edge_list, file_path)
+    
+
 
     # PUBLIC
     # ------------------------------------------------------------------------------------------------------------------
-
+    @log_method
     def compute_similarity(self):
         """
             Compute the edge list for all the time windows, launching on thread for each window.
         """
-        self.lm.printl(f"{file_name}. compute_similarity start.")
         start_time = time.time()
 
         df = self.__read_co_action_dataset()
@@ -379,3 +621,9 @@ class SimilarityFunctionManager:
         finish_time = time.time()
         delta_time = finish_time - start_time
         self.lm.printl(f"{file_name}. compute_similarity completed in %s seconds" % delta_time)
+   
+    def convert_ids_edge_list(self):
+        """
+        Convert userId1 and userId2 in edge list from string to int, after replacing '-' with '_'."""
+        self._process_csv_directory(self.dm.path_edge_list_temporal)
+        self._process_csv_directory(self.dm.path_edge_list)

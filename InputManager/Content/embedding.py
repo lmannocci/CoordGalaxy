@@ -28,7 +28,3 @@ class EmbeddingManager:
         ).astype(np.float32)
 
         self.ch.save_object(embeddings, output_path)
-        # Save embeddings only
-        np.save(output_path, embeddings)
-
-    

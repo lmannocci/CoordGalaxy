@@ -9,6 +9,7 @@ from IntegrityConstraintManager.IntegrityConstraintManager import *
 from utils.common_variables import *
 from utils.Checkpoint.Checkpoint import *
 from utils.ConversionManager.ConversionManager import *
+from utils.decorator_definition import *
 
 import uunet.multinet as ml
 import os
@@ -183,6 +184,12 @@ class CharacterizationManager:
         self.vm.delete_small_communities_single_layer(th_size)
         self.lm.printl(f"{file_name}. delete_small_communities_single_layer completed.")
 
+    @log_method
+    def charactrize_url_layers_communities(self):
+        if self.type_algorithm == 'one-layer' or self.cda.get_algorithm_name() in flatten_algorithm:
+            self.lm.printl(f"{file_name}. charactrize_url_layers_communities implemented only for multiplex community discovery algorithm.")
+        else:
+            self.mce.charactrize_url_layers_communities()
 
     # GENERAL PURPOSE OBJECTS FUNCTIONS
     def get_directory_manager(self):

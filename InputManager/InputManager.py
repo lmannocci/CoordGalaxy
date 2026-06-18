@@ -3,6 +3,7 @@ from DirectoryManager import DirectoryManager
 from utils.ElasticSearch import *
 from utils.Checkpoint.Checkpoint import *
 from InputManager.Content.embedding import EmbeddingManager
+from utils.decorator_definition import *
 
 import elasticsearch
 import json
@@ -270,7 +271,6 @@ class InputManager:
             :param filename: [str] Csv file to save the pandas dataframe
             :return: [DataFrame] Return a pandas DataFrame with extracted retweets or replies.
         """
-        self.lm.printl(f"{file_name}. __extract_retweet_reply start.")
 
         df_not_null = df[df[c_original].isnull() == False]
         if self.dataset_name == "uk2019":
@@ -286,8 +286,7 @@ class InputManager:
         self.ch.save_dataframe(filter_df, self.dm.path_dataset + filename)
 
         self.lm.printl(
-            f"Number of extracted retweets: {len(filter_df)}, unique userIds: {len(filter_df['userId'].unique())}")
-        self.lm.printl(f"{file_name}. __extract_retweet_reply finish.")
+            f"Number of extracted {c_mapped}: {len(filter_df)}, unique userIds: {len(filter_df['userId'].unique())}")
         return filter_df
 
     def __normalize_data_ira(self, df, filename):
@@ -397,32 +396,89 @@ class InputManager:
         self.lm.printl(f"{file_name}. normalize_data finish.")
 
         return df
-    
-    def __normalize_data_moltbook(self, df, filename):
-        rename_dict = {
-                'created_at': 'created',
-                'author_id': 'userId',
-                'post_id': 'replyId'
-            }
-        df = df.rename(columns=rename_dict)
 
-        selected_column = ['id', 'created', 'userId', 'hashtag_list', 'url_list', 'mention_list', 'retweetId', 'replyId', 'isControl']
+    @log_method
+    def __normalize_data_moltbook(self, df, filename):
+        if 'comment' in filename:
+            self.lm.printl(f"{file_name}. normalize_data_moltbook comments.")
+            rename_dict = {
+                    'created_at': 'created',
+                    'author_id': 'userId',
+                    'post_id': 'replyId',
+                    'content': 'text'
+                }
+            
+            df['type'] = 'reply'
+            selected_column = ['id', 'created', 'userId', 'text','replyId', 'type']
+        elif 'post' in filename:
+            self.lm.printl(f"{file_name}. normalize_data_moltbook posts.")
+            rename_dict = {
+                    'created_at': 'created',
+                    'author_id': 'userId',
+                    'content': 'text'
+                }
+            selected_column = ['id', 'created', 'userId', 'text', 'type']
+            df['type'] = 'original'
+
+        df = df.rename(columns=rename_dict)    
         df = df[selected_column]
 
         # convert datetime column to the best format
-        df['created'] = pd.to_datetime(df['created'], format='%Y-%m-%d %H:%M:%S')
+        df['created'] = pd.to_datetime(df['created'], format='ISO8601', utc=True)
         df['created'] = df['created'].dt.strftime('%Y-%m-%d %H:%M:%S')
-
-        df['type'] = np.where(df['retweetId'].isnull() == False, 'retweet',
-                              np.where(df['replyId'].isnull() == False, "reply", "original"))
-
 
         df = df.sort_values(by=['created'])
         df = df.reset_index(drop=True)
-
+        
+        # uunet does not like dashes '-' in userIds, so we replace them with underscores '_'
+        # df["userId"] = df["userId"].str.replace("-", "_", regex=False)
+        # Replace original userIds with compact stable ids shared across files
+        df = self.__map_user_ids(df)
         self.ch.save_dataframe(df, self.dm.path_dataset + filename)
-        self.lm.printl(f"{file_name}. normalize_data finish.")
 
+        return df
+
+    def __get_user_id_mapping_path(self):
+        return self.dm.path_dataset + "user_id_mapping.json"
+
+
+    def __load_user_id_mapping(self):
+        path = self.__get_user_id_mapping_path()
+
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        return {}
+
+
+    def __save_user_id_mapping(self, mapping):
+        path = self.__get_user_id_mapping_path()
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, indent=2, ensure_ascii=False)
+
+
+    def __map_user_ids(self, df):
+        """
+        Load existing userId mapping, update it with users in df,
+        replace df['userId'], and save the updated mapping.
+        """
+        mapping = self.__load_user_id_mapping()
+
+        def get_or_create_user_id(old_id):
+            old_id = str(old_id)
+
+            if old_id not in mapping:
+                mapping[old_id] = f"u_{len(mapping)}"
+
+            return mapping[old_id]
+
+        df = df.copy()
+        df["original_userId"] = df["userId"].astype(str)
+        df["userId"] = df["original_userId"].apply(get_or_create_user_id)
+
+        self.__save_user_id_mapping(mapping)
         return df
 
     def __extract_url_uk2019(self, df, filename, known_url):
@@ -482,18 +538,58 @@ class InputManager:
         filter_df['url_list'] = filter_df['url_list'].apply(self.__fix_and_parse_urls)
         return filter_df
 
+    # START MOLTBOOK URL extraction
+    # ------------------------------------------------------------------------------------------------------------------
+    def __extract_url_moltbook(self, df):
+        df["url_list"] = df["text"].apply(self.__extract_urls)
+        
+        df['type'] = 'reply'
+
+        filter_df = df[['id', 'userId', 'created', 'url_list', 'type']].copy()
+
+        return filter_df
+
+    # --- Cleaning function ---
+    def __clean_url(self, url):
+        # Remove trailing punctuation
+        url = url.strip(".,!?;:()[]{}<>\"'")
+        
+        # Add scheme if missing (optional)
+        if url.startswith("www."):
+            url = "http://" + url
+        
+        return url
+
+    # --- Extract function ---
+    def __extract_urls(self, text):
+        if pd.isna(text):
+            return []
+        
+        # --- URL regex ---
+        url_pattern = re.compile(
+            r"""(
+                (?:https?://|www\.)[^\s<>"]+      # http:// or https:// or www.
+                |
+                (?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}  # domain like example.com
+                (?:/[^\s<>"]*)?                   # optional path
+            )""",
+            re.VERBOSE
+        )
+
+        matches = url_pattern.findall(text)
+        
+        cleaned = [self.__clean_url(m) for m in matches]
+        
+        # Optional: remove duplicates
+        return list(dict.fromkeys(cleaned))
+
+    # END MOLTBOOK URL extraction
+    # ------------------------------------------------------------------------------------------------------------------
+
     def __extract_hashtag_ira(self, df, filename):
-        # not_nan_hashtag = df[df['hashtag_list'].apply(lambda x: isinstance(x, list) and len(x) > 0)]
-        not_nan_hashtag = df[
-        df['hashtag_list'].apply(
-                lambda x: (
-                    isinstance(x, list) and len(x) > 0      # real list, non-empty
-                ) or (
-                    isinstance(x, str) and x.strip() not in ['[]', '']  # non-empty string, not '[]'
-                )
-            )
-        ]
-        filter_df = not_nan_hashtag[['id', 'userId', 'created', 'hashtag_list', 'type', 'class']].copy()
+        df["url_list"] = df["text"].apply(self.__extract_urls)
+
+        filter_df = df[['id', 'userId', 'created', 'hashtag_list', 'type', 'class']].copy()
         return filter_df
 
     def __extract_hashtag_IORussia(self, df, filename, known_url):
@@ -843,6 +939,7 @@ class InputManager:
         self.lm.printl(f"{file_name}. normalize_data_user completed.")
         return df
 
+    @log_method
     def extract_url_dataset(self, df, filename, known_url, parse_urls=True):
         
         """
@@ -853,14 +950,15 @@ class InputManager:
             :param excludeDomainList: [list, optional] List of domainUrls to be excluded from the dataframe
             :return: [DataFrame] Return a pandas DataFrame with extracted URLs.
         """
-        self.lm.printl(f"{file_name}. extract_url_dataset start.")
         if self.dataset_name == "uk2019":
             filter_df = self.__extract_url_uk2019(df, filename, known_url)
         elif self.dataset_name == "ira":
             filter_df =  self.__extract_url_ira(df, filename, known_url)
         elif self.dataset_name == "IORussia":
             filter_df =  self.__extract_url_IORussia(df, filename, known_url)
-    
+        elif self.dataset_name == "moltbook":
+            filter_df =  self.__extract_url_moltbook(df)
+
         # each tweet can contain more than one URL, which is included in the url_list column, which is a list. I explode
         # this column, creating a row for each URL
         result_df = filter_df.explode('url_list')
@@ -913,13 +1011,18 @@ class InputManager:
 
         self.ch.save_dataframe(result_df, self.dm.path_dataset + filename)
         self.lm.printl(f"Number of extracted URLs: {len(result_df)}, unique userIds: {len(result_df['userId'].unique())}")
-        self.lm.printl(f"{file_name}. extract_url_dataset completed.")
 
         
     def extract_text_dataset(self, df, filename):
         df = df[df['text'].isnull() == False]
         em = EmbeddingManager()
         em.build_multilingual_embeddings(df, text_col="content", output_path=f"{self.dm.path_dataset}{filename}",model_name="intfloat/multilingual-e5-large", batch_size=32)
+  
+    def extract_text_dataset(self, df, filename):
+        text_col = 'text'
+        df = df[df[text_col].isnull() == False]
+        em = EmbeddingManager(self.dataset_name, self.ch, self.lm)
+        em.build_multilingual_embeddings(df, text_col=text_col, output_path=f"{self.dm.path_dataset}{filename}", model_name="intfloat/multilingual-e5-large", batch_size=32)
 
     def filter_content_df(self, df, c, excludeList, filename):
         self.lm.printl(f"{file_name}. filter_content_df start.")
@@ -1008,8 +1111,8 @@ class InputManager:
         self.lm.printl(f"{file_name}. extract_retweet_dataset completed.")
         return filter_df
 
+    @log_method
     def extract_reply_dataset(self, df, filename):
-        self.lm.printl(f"{file_name}. extract_reply_dataset start.")
-        filter_df =  self.__extract_retweet_reply(df, filename, 'replyId', 'reply')
-        self.lm.printl(f"{file_name}. extract_reply_dataset completed.")
+        c_original = 'replyId'
+        filter_df =  self.__extract_retweet_reply(df, filename, c_original, 'reply')
         return filter_df

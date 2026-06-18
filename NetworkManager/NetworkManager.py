@@ -7,6 +7,7 @@ import networkx as nx
 import uunet.multinet as ml
 import os
 import pandas as pd
+from utils.decorator_definition import *
 
 absolute_path = os.path.dirname(__file__)
 file_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -49,12 +50,11 @@ class NetworkManager:
     # PUBLIC
     # ------------------------------------------------------------------------------------------------------------------
 
+    @log_method
     def create_weighted_graph(self):
         """
             Convert filtered edge list in networkx graph.
         """
-        self.lm.printl(f"{file_name}. create_weighted_graph start.")
-
         for type_ca, dict_path in self.dm.dict_path_ca.items():
             edge_list_files = [pos_csv for pos_csv in os.listdir(dict_path["path_filter_edge_list"]) if pos_csv.endswith('.p')]
             for elf in edge_list_files:
@@ -67,8 +67,6 @@ class NetworkManager:
 
                 self.lm.printl(f"{file_name}. create_weighted_graph, {elf}.")
                 self.ch.save_object(G, dict_path["path_filter_graph"] + elf)
-
-        self.lm.printl(f"{file_name}. create_weighted_graph completed.")
 
     def create_weighted_multiplex_network(self, save_edge_list_df=False):
         """

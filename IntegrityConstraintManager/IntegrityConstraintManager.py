@@ -41,6 +41,8 @@ class IntegrityConstraintManager:
             raise ValueError(m)
 
     def check_user_fraction(self, user_fraction):
+        if user_fraction is None: # None is a valid value, it means that all users are selected, so no check is needed
+            return
         if not isinstance(user_fraction, float):
             m = f"{self.file_name}. {user_fraction} is not a float or integer."
             self.lm.printl(m)
@@ -60,6 +62,10 @@ class IntegrityConstraintManager:
             the whole similarity matrix, before discarding zero values. Instead, if false, it computes the similarity for each couples
             of user and only if nonzero value, it is saved in memory.
         """
+        # If similarity function is in irrelevant_sparse_conputation_function, the check is not needed, 
+        # because the sparse computation is not relevant for that similarity function.
+        if ca.get_similarity_function() in irrelevant_sparse_computation_function:
+            return
 
         if sparse_computation == True and ca.get_similarity_function() not in sparse_computation_function:
             m = f"{self.file_name}. {ca.get_similarity_function()} does not have the sparse computation implemented."
