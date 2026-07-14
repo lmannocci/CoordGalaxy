@@ -1,4 +1,35 @@
-# Multimodal Coordinated Behavior
+# CoordGalaxy
+
+[**CoordGalaxy**](https://github.com/lmannocci/CoordGalaxy) is an extensible framework for coordinated behavior
+detection and characterization across online social platforms.
+
+CoordGalaxy standardizes heterogeneous social-platform datasets into common co-action inputs, builds single-layer and
+multiplex coordination networks, supports optional user selection and graph filtering, and provides modules for network
+characterization, community detection, community comparison, and LaTeX-ready result tables.
+
+![CoordGalaxy metaphor: the galaxy is the social media space, users are stars, and coordinated communities are constellations.](docs/assets/coordgalaxy.png)
+
+## Future Work
+
+CoordGalaxy is designed to support extensions beyond the current single-platform and time-windowed coordination
+pipeline. Two planned directions are especially important:
+
+```text
+Cross-platform analysis
+```
+
+Future versions will support coordinated behavior analysis across multiple social platforms in the same study. This
+requires a shared co-action ontology, platform-specific aliases for equivalent behaviors, and result views that can
+compare coordination patterns across ecosystems such as Twitter/X, Reddit, Telegram, YouTube, or domain-specific
+communities.
+
+```text
+Temporal analysis
+```
+
+The current framework already builds time-windowed edge lists and merged networks. A richer temporal-analysis layer is
+planned to study how coordinated communities appear, persist, split, merge, and disappear over time, and to characterize
+the temporal stability of users, co-actions, layers, and communities.
 
 ## Adding a New Dataset
 

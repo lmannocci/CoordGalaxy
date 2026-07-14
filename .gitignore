@@ -3,6 +3,7 @@ results/
 data/*
 !data/.gitkeep
 utils/LogManager/log/
+utils/ElasticSearch/config/credentials.json
 # Byte-compiled files
 *.pyc
 *.pyo
