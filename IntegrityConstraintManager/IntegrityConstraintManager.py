@@ -1,8 +1,30 @@
-from utils.common_variables import *
-from utils.LogManager.LogManager import *
+from typing import Any
+
+from utils.LogManager.LogManager import LogManager
+from utils.common_variables import (
+    available_co_action,
+    available_filter_graph,
+    available_network_metrics,
+    available_node_metrics,
+    available_type_filter,
+    available_type_merge,
+    dense_computation_function,
+    irrelevant_sparse_computation_function,
+    multi_layer_algorithm,
+    multi_temporal_multi_layer_algorithm,
+    normalize_co_action_id,
+    one_layer_algorithm,
+    required_algorithm_parameters,
+    sparse_computation_function,
+)
 
 class IntegrityConstraintManager:
-    def __init__(self, file_name):
+    def __init__(self, file_name: str) -> None:
+        """
+            Initialize the integrity-constraint manager.
+            :param file_name: [str] Name of the caller module used in validation messages.
+            :return: None.
+        """
         self.lm = LogManager("main")
         self.file_name = file_name
 
@@ -21,13 +43,14 @@ class IntegrityConstraintManager:
         """
             Check consistency co-actions and similarity function.
         """
-        if co_action not in available_co_action.keys():
+        canonical_co_action = normalize_co_action_id(co_action)
+        if canonical_co_action not in available_co_action.keys():
             m = f"Co-action {co_action} is not available."
             self.lm.printl(m)
             raise ValueError(m)
         else:
-            if similarity_function not in available_co_action[co_action]:
-                m = f"{self.file_name}Similarity function {similarity_function} is not available for co-action {co_action}."
+            if similarity_function not in available_co_action[canonical_co_action]:
+                m = f"{self.file_name}Similarity function {similarity_function} is not available for co-action {canonical_co_action}."
                 self.lm.printl(m)
                 raise ValueError(m)
 
@@ -89,7 +112,8 @@ class IntegrityConstraintManager:
 
     def check_list_co_action(self, co_action_list):
         for ca in co_action_list:
-            if ca not in available_co_action.keys():
+            canonical_ca = normalize_co_action_id(ca)
+            if canonical_ca not in available_co_action.keys():
                 m = f"{self.file_name}. {ca} is not an available co-action. Available co-actions are: {str(available_co_action.keys())}."
                 self.lm.printl(m)
                 raise ValueError(m)
@@ -105,6 +129,17 @@ class IntegrityConstraintManager:
             self.lm.printl(m)
             raise ValueError(m)
 
+        dynamic_weight_filters = ["low_std", "mean", "high_std", "median"]
+        if type_filter in dynamic_weight_filters:
+            if threshold is not None:
+                m = (
+                    f"{self.file_name}. type_filter={type_filter} computes its threshold from the previous edge list. "
+                    "Set threshold=None in the Filter config."
+                )
+                self.lm.printl(m)
+                raise ValueError(m)
+            return
+
         if previous_filter is not None:
             # if not isinstance(previous_filter, Filter):
             #     m = f"{self.file_name}. previousFilter must be of type Filter."
@@ -118,13 +153,13 @@ class IntegrityConstraintManager:
                 self.lm.printl(m)
                 raise ValueError(m)
 
-        if isinstance(threshold, (int, float)) or (threshold is None and (type_filter in ['low_std', 'mean', 'high_std', 'th', 'median'])):
+        if isinstance(threshold, (int, float)):
             if type_filter == "backbone" or type_filter == "th":
                 if threshold is None or (threshold < 0 or threshold > 1):
                     m = f"{self.file_name}. Threshold is {str(threshold)}, please select a valid value fo threshold between 0 and 1."
                     self.lm.printl(m)
                     raise ValueError(m)
-            elif type_filter == "threshold_action":
+            elif type_filter in ["threshold_action", "filter_merge_action", "merge_filter_action", "node_topEdge"]:
                 if threshold is None or (threshold < 1):
                     m = f"{self.file_name}. Threshold is {str(threshold)}, please select a valid value fo threshold greater than 1."
                     self.lm.printl(m)
@@ -136,11 +171,18 @@ class IntegrityConstraintManager:
         
     # NetworkManager / CommunityDetectionManager
     # ------------------------------------------------------------------------------------------------------------------
-    def check_co_action(self, list_ca, dict_ca_filter):
+    def check_co_action(self, list_ca: list[Any], dict_ca_filter: dict[str, Any]) -> None:
+        """
+            Check that each filtered co-action has a corresponding co-action object.
+            :param list_ca: [list[Any]] Co-action objects selected for the current pipeline step.
+            :param dict_ca_filter: [dict[str, Any]] Filter configuration keyed by co-action id.
+            :return: None.
+        """
         for ca_type in dict_ca_filter.keys():
+            canonical_ca_type = normalize_co_action_id(ca_type)
             match = False
             for ca_object in list_ca:
-                if ca_object.get_co_action() == ca_type:
+                if normalize_co_action_id(ca_object.get_co_action()) == canonical_ca_type:
                     match = True
             if match == False:
                 m = f"{self.file_name}. For each co_action specified in list_ca, must be specified in dict_ca_threshold, the corresponding threshold."
@@ -156,7 +198,13 @@ class IntegrityConstraintManager:
 
     # CDAlgorithm
     # ------------------------------------------------------------------------------------------------------------------
-    def check_CDAlgorithm(self, algorithm_name, parameters):
+    def check_CDAlgorithm(self, algorithm_name: str, parameters: dict[str, Any] | None) -> None:
+        """
+            Check that a community-detection algorithm and its required parameters are available.
+            :param algorithm_name: [str] Algorithm name, for example louvain, glouvain, or ginfomap.
+            :param parameters: [dict[str, Any] | None] Parameters passed to the algorithm.
+            :return: None.
+        """
         # check algorithm
         available_algorithms = one_layer_algorithm + multi_layer_algorithm + multi_temporal_multi_layer_algorithm
         if algorithm_name not in available_algorithms:
@@ -200,7 +248,14 @@ class IntegrityConstraintManager:
 
     # CommunityDetectionManager
     # ------------------------------------------------------------------------------------------------------------------
-    def check_type_algorithm(self, tw, list_ca, algorithm_name):
+    def check_type_algorithm(self, tw: Any, list_ca: list[Any], algorithm_name: str) -> None:
+        """
+            Check that the selected community algorithm matches the network type to analyze.
+            :param tw: [Any] TimeWindow object defining merged or temporal network output.
+            :param list_ca: [list[Any]] Co-action objects selected for the current pipeline step.
+            :param algorithm_name: [str] Community-detection algorithm name.
+            :return: None.
+        """
         data_m = f"""type_output_network: {tw.get_type_output_network()} - number_co_action: {str(len(list_ca))} - algorithm: {algorithm_name}."""
         self.lm.printl(algorithm_name)
         if len(list_ca) == 0:

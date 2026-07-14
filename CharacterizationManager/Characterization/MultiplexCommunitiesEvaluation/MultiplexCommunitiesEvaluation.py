@@ -8,6 +8,7 @@ from IntegrityConstraintManager.IntegrityConstraintManager import *
 from utils.common_variables import *
 from utils.Checkpoint.Checkpoint import *
 from utils.ConversionManager.ConversionManager import *
+from utils.DomainCategoryManager import DomainCategoryManager
 from utils.PlotManager.PlotManager import *
 from utils.decorator_definition import *
 
@@ -17,14 +18,44 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import statistics
 import numpy as np
+import pandas as pd
 import math
+from typing import Any, Sequence
 absolute_path = os.path.dirname(__file__)
 file_name = os.path.splitext(os.path.basename(__file__))[0]
 results = os.path.join(absolute_path, f"..{os.sep}results{os.sep}")
 
 
 class MultiplexCommunitiesEvaluation:
-    def __init__(self, dataset_name, user_fraction, type_filter, list_ca, dict_ca_filter, icm, dm, type_algorithm, cda):
+    """
+    Compute and save metrics, summaries, and characterizations for multiplex communities.
+    """
+
+    def __init__(
+        self,
+        dataset_name: str,
+        user_fraction: float | None,
+        type_filter: str | None,
+        list_ca: Sequence[Any],
+        dict_ca_filter: dict[str, Any],
+        icm: Any,
+        dm: DirectoryManager,
+        type_algorithm: str,
+        cda: Any,
+    ) -> None:
+        """
+            Create the evaluator for multiplex community outputs.
+            :param dataset_name: Dataset directory name.
+            :param user_fraction: User-selection fraction used in path resolution.
+            :param type_filter: User-selection strategy name.
+            :param list_ca: Co-action objects included in the characterization.
+            :param dict_ca_filter: Filter configuration by co-action id.
+            :param icm: Integrity constraint manager.
+            :param dm: Directory manager with community-analysis paths.
+            :param type_algorithm: Algorithm type detected by DirectoryManager.
+            :param cda: Community-detection algorithm configuration.
+            :return: None.
+        """
         self.lm = LogManager('main')
         self.ch = Checkpoint()
         self.cm = ConversionManager()
@@ -47,9 +78,11 @@ class MultiplexCommunitiesEvaluation:
         self.ce = CommunitiesEvaluation(self.lm)
 
     @log_method
-    def compute_info_communities(self):
+    def compute_multiplex_community_membership_summary(self) -> None:
         """
-        Compute info about communities per layer and per community, such as number of actors, number of layers, etc."""
+            Compute membership summaries for multiplex communities by layer and by community.
+            :return: None. Per-layer and per-community summary CSV files are saved to the community analysis directory.
+        """
         graph_files = [
             pos_csv
             for pos_csv in os.listdir(self.dm.path_user_dataframe)
@@ -94,23 +127,26 @@ class MultiplexCommunitiesEvaluation:
         # -----------------------------
         # SAVE
         # -----------------------------
-        self.ch.update_dataframe(
+        self.ch.save_dataframe(
             community_df,
             self.dm.path_community_analysis +
             f"{self.cda.get_algorithm_name()}_info_cda_per_community.csv",
-            dtype
         )
 
-        self.ch.update_dataframe(
+        self.ch.save_dataframe(
             layer_df,
             self.dm.path_community_analysis +
-            f"{self.cda.get_algorithm_name()}_info_cda_per_layer.csv",
-            dtype=dtype
+            f"{self.cda.get_algorithm_name()}_info_cda_per_layer.csv"
         )
 
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __compute_community_weight_stats(self, df, networkx_graphs, weight_label):
+    def _compute_community_weight_stats(
+        self,
+        df: Any,
+        networkx_graphs: dict[str, nx.Graph],
+        weight_label: str,
+    ) -> Any:
         """
         Compute mean, median, std, MAD, number of edges, nodes, and layers
         for each community in a multiplex network.
@@ -196,19 +232,105 @@ class MultiplexCommunitiesEvaluation:
         result = result.sort_values('size', ascending=False)
         return result
 
+    def _has_is_control_label(self, data_df: pd.DataFrame, context: str) -> bool:
+        """
+            Check whether the dataframe includes the optional isControl validation label.
+            :param data_df: [pd.DataFrame] Source co-action dataframe.
+            :param context: [str] Description of the input being validated, used in log messages.
+            :return: [bool] True when isControl is available, otherwise False.
+        """
+        if "isControl" in data_df.columns:
+            return True
+        self.lm.printl(f"{file_name}. validate_communities skipped: isControl label not found in {context}.")
+        return False
+
+    def _normalize_is_control_column(self, data_df: pd.DataFrame, context: str) -> pd.DataFrame:
+        """
+            Normalize the isControl label to boolean values before validation.
+            :param data_df: [pd.DataFrame] Dataframe containing an isControl column.
+            :param context: [str] Description of the input being normalized, used in error messages.
+            :return: [pd.DataFrame] Copy of the dataframe with boolean isControl values.
+        """
+        normalized_df = data_df.copy()
+        if pd.api.types.is_bool_dtype(normalized_df["isControl"]):
+            normalized_df["isControl"] = normalized_df["isControl"].astype(bool)
+            return normalized_df
+
+        true_values = {"true", "1", "yes", "y", "control"}
+        false_values = {"false", "0", "no", "n", "coord", "coordinated"}
+
+        def normalize_value(value: Any) -> bool | None:
+            """
+                Convert one label value to bool when it matches a supported encoding.
+                :param value: [Any] Raw isControl value.
+                :return: [bool | None] Boolean value, or None when the value is unknown.
+            """
+            if pd.isna(value):
+                return None
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, np.integer)):
+                if value == 1:
+                    return True
+                if value == 0:
+                    return False
+            value_str = str(value).strip().lower()
+            if value_str in true_values:
+                return True
+            if value_str in false_values:
+                return False
+            return None
+
+        converted = normalized_df["isControl"].map(normalize_value)
+        if converted.isna().any():
+            invalid_values = sorted(normalized_df.loc[converted.isna(), "isControl"].dropna().astype(str).unique())
+            message = f"{file_name}. Unknown isControl values in {context}: {invalid_values}"
+            self.lm.printl(message)
+            raise ValueError(message)
+
+        normalized_df["isControl"] = converted.astype(bool)
+        return normalized_df
+
+    def _build_label_count_dataframe(self, post_df: pd.DataFrame, groupby_columns: list[str]) -> pd.DataFrame:
+        """
+            Count control and coordinated users for each validation group.
+            :param post_df: [pd.DataFrame] Community dataframe with a boolean isControl column.
+            :param groupby_columns: [list[str]] Columns used for grouping, excluding isControl.
+            :return: [pd.DataFrame] Counts and percentages for control and coordinated users.
+        """
+        group_counts = (
+            post_df.groupby(groupby_columns + ["isControl"])
+            .size()
+            .unstack("isControl", fill_value=0)
+        )
+        for label_value in [True, False]:
+            if label_value not in group_counts.columns:
+                group_counts[label_value] = 0
+
+        group_counts = group_counts.reindex(columns=[True, False], fill_value=0)
+        group_counts = group_counts.rename(columns={True: "nControl", False: "nCoord"}).reset_index()
+        group_counts["nTotal"] = group_counts["nControl"] + group_counts["nCoord"]
+        group_counts["percControl"] = group_counts["nControl"] / group_counts["nTotal"]
+        group_counts["percCoord"] = group_counts["nCoord"] / group_counts["nTotal"]
+        group_counts["purity"] = group_counts[["nControl", "nCoord"]].max(axis=1) / group_counts["nTotal"]
+        return group_counts
+
 
     # PUBLIC METHODS
     # ------------------------------------------------------------------------------------------------------------------
 
-    def compute_statistics_communities(self):
+    @log_method
+    def compute_community_summary_statistics(self) -> None:
+        """
+            Compute descriptive statistics for multiplex communities.
+            :return: None. Statistics are saved to the community analysis directory.
+        """
         # (1) the number of communities generated,
         # (2) the average community size,
         # (3) the percentage of vertices included in at least one cluster (which is 1 for complete community detection methods),
         # (4) the percentage of actors included in at least one cluster (which is 1 for complete community detection methods),
         # (5) the ratio between the number of actor-layer pairs and the number of distinct actor-layer pairs,
         # indicating the level of overlapping (which is 1 for partitioning community detection methods and higher for overlapping methods).
-        self.lm.printl(f"{file_name}. compute_statistics_communities start.")
-
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_multi_graph) if pos_csv.endswith('.txt')]
         net_filename = graph_files[0]
         net_filename_no_ext = net_filename.split('.')[0]
@@ -236,11 +358,22 @@ class MultiplexCommunitiesEvaluation:
 
         self.ch.update_dataframe(stats_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_statistics_communities.csv", dtype=dtype)
 
-        self.lm.printl(f"{file_name}. compute_statistics_communities completed.")
-
-    def compute_metrics_node_communities(self, metrics, th_size, restrict_neighbors, merge_existing):
-        self.lm.printl(f"{file_name}. compute_metrics_node_communities start.")
-
+    @log_method
+    def compute_metrics_node_communities(
+        self,
+        metrics: Sequence[str] | None,
+        th_size: int | None,
+        restrict_neighbors: bool,
+        merge_existing: bool
+    ) -> None:
+        """
+            Compute node metrics inside multiplex communities for each layer graph.
+            :param metrics: Node metric names to compute, or None for defaults.
+            :param th_size: Minimum community size to include.
+            :param restrict_neighbors: Whether neighbor-based metrics should only count selected-community neighbors.
+            :param merge_existing: Whether to merge computed columns with an existing metrics file.
+            :return: None. Node-community metrics are saved to the community analysis directory.
+        """
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_multi_graph) if pos_csv.endswith('.txt')]
         net_filename = graph_files[0]
         net_filename_no_ext = net_filename.split('.')[0]
@@ -259,7 +392,7 @@ class MultiplexCommunitiesEvaluation:
 
         # Iterate over each graph in the list
         for layer, G in networkx_graphs.items():
-            self.lm.printl(f"{file_name}. compute_metrics_node_communities layer: {layer} start.")
+            self.lm.printl(f"{file_name}. compute_metrics_node_communities processing layer: {layer}.")
             type_ca = action_map_inverse[layer]
             layer_df = comm_df[comm_df['layer'] == layer]
             layer_df.drop(columns=['layer'], inplace=True)
@@ -299,12 +432,13 @@ class MultiplexCommunitiesEvaluation:
             for file in temp_files:
                 if os.path.exists(file):
                     os.remove(file)
-
-        self.lm.printl(f"{file_name}. compute_metrics_node_communities completed.")
     
-
-    def validate_communities(self):
-        self.lm.printl(f"{file_name}. validate_communities start.")
+    @log_method
+    def validate_communities(self) -> None:
+        """
+            Validate multiplex communities against available isControl labels in source co-action data.
+            :return: None. Validation dataframes and plots are saved to the community analysis directory.
+        """
         com_df_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]
         com_df_filename = com_df_files[0]
         comm_df = self.ch.read_dataframe(self.dm.path_user_dataframe + com_df_filename, dtype=dtype)
@@ -312,9 +446,12 @@ class MultiplexCommunitiesEvaluation:
         df_list = []
         for ca in self.list_ca:
             ca_type = ca.get_co_action()
-            df = self.ch.read_dataframe(f"{self.dm.path_dataset}{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{ca_type}.csv", dtype)
+            df = self.ch.read_dataframe(self._filtered_co_action_file_path(action_map[ca_type]), dtype)
+            if not self._has_is_control_label(df, ca_type):
+                return
             df_list.append(df)
         data_df = pd.concat(df_list)
+        data_df = self._normalize_is_control_column(data_df, self.cda.get_algorithm_name())
         pre_df = data_df[['userId', 'isControl']]
         pre_df = pre_df.drop_duplicates()
         
@@ -328,39 +465,73 @@ class MultiplexCommunitiesEvaluation:
         post_df = post_df.drop(columns='actor')
         post_df = post_df.rename(columns={'cid': 'group'})
 
-        groupby_lists = [['group', 'isControl'], ['group', 'layer', 'isControl']]
+        groupby_lists = [['group'], ['group', 'layer']]
         
 
         for groupby_list in groupby_lists:
-            groupby_str = '_'.join(groupby_list)
-            self.lm.printl(f"{file_name}. validate_communities groupby: {groupby_str} start.")
-            # --- Count True/False per group
-            group_counts = (
-                post_df.groupby(groupby_list)
-                .size()
-                .unstack(fill_value=0)
-                .rename(columns={True: 'nControl', False: 'nCoord'})
-                .reset_index()
-            )
-
-            # --- Compute percentages
-            group_counts['nTotal'] = group_counts['nControl'] + group_counts['nCoord']
-            group_counts['percControl'] = group_counts['nControl'] / group_counts['nTotal']
-            group_counts['percCoord'] = group_counts['nCoord'] / group_counts['nTotal']
-
-            # --- Reset index if you want a regular dataframe
-            group_stats = group_counts.reset_index(drop=True)
-
-            # Compute purity
-            group_stats['purity'] = group_stats[['nControl', 'nCoord']].max(axis=1) / group_stats['nTotal']
+            groupby_str = '_'.join(groupby_list + ['isControl'])
+            self.lm.printl(f"{file_name}. validate_communities processing groupby: {groupby_str}.")
+            group_stats = self._build_label_count_dataframe(post_df, groupby_list)
 
             self.ch.save_dataframe(group_stats, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_{groupby_str}_validation_communities.csv")
 
             self.pm.plot_histogram(self.dm.path_community_analysis, self.cda.get_algorithm_name(), group_stats['purity'], 'Purity', 'Number of Groups',
                                'Distribution of Group Purity', f"{self.cda.get_algorithm_name()}_{groupby_str}_purity_distribution.png")
 
-    def compute_coordination_communities(self, community_size_th, community_label, weight_label):
-        self.lm.printl(f"{file_name}. compute_coordination_communities start.")
+    def _filtered_co_action_file_path(self, action_name: str) -> str:
+        """
+            Return the filtered co-action file path, preferring the dataset-directory scoped filename template.
+            :param action_name: [str] Co-action filename stem.
+            :return: [str] Path to the filtered co-action CSV.
+        """
+        co_action_data_path = self._co_action_data_path()
+        filename = f"{action_name}.csv"
+        path = f"{co_action_data_path}{filename}"
+        if os.path.exists(path):
+            return path
+
+        legacy_filename = f"{self.dataset_name}_{action_name}.csv"
+        legacy_path = f"{co_action_data_path}{legacy_filename}"
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+        if self.user_fraction is not None:
+            old_filtered_filename = f"{self.user_fraction}_{self.type_filter}_{action_name}.csv"
+            old_filtered_path = f"{self.dm.path_co_action_data}{old_filtered_filename}"
+            if os.path.exists(old_filtered_path):
+                return old_filtered_path
+
+            old_legacy_filename = f"{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{action_name}.csv"
+            old_legacy_path = f"{self.dm.path_co_action_data}{old_legacy_filename}"
+            if os.path.exists(old_legacy_path):
+                return old_legacy_path
+
+        return legacy_path
+
+    def _co_action_data_path(self) -> str:
+        """
+            Return the directory to read co-action artifacts from.
+            :return: [str] Selected-user co-action directory when present, otherwise the base co_action_data directory.
+        """
+        filtered_path = self.dm.get_co_action_data_path(self.user_fraction, self.type_filter)
+        if self.user_fraction is not None and os.path.isdir(filtered_path):
+            return filtered_path
+        return self.dm.path_co_action_data
+
+    @log_method
+    def compute_community_edge_weight_statistics(
+        self,
+        community_size_th: int | None,
+        community_label: str,
+        weight_label: str
+    ) -> None:
+        """
+            Compute edge-weight coordination statistics for multiplex communities.
+            :param community_size_th: Minimum community size to include, or None to include all communities.
+            :param community_label: Community label column or attribute name.
+            :param weight_label: Edge attribute containing edge weights.
+            :return: None. Coordination statistics are saved to the community analysis directory.
+        """
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_multi_graph) if pos_csv.endswith('.txt')]
         net_filename = graph_files[0]
         net_filename_no_ext = net_filename.split('.')[0]
@@ -372,126 +543,215 @@ class MultiplexCommunitiesEvaluation:
         comm_df = self.ch.read_dataframe(self.dm.path_user_dataframe + com_df_filename, dtype=dtype)
 
         networkx_graphs = ml.to_nx_dict(MG)
-        stats_df = self.__compute_community_weight_stats(comm_df, networkx_graphs, weight_label)
+        stats_df = self._compute_community_weight_stats(comm_df, networkx_graphs, weight_label)
         if community_size_th is not None:
             th_str = f"_th_size_{str(community_size_th)}"
             stats_df = stats_df[stats_df['size'] >= community_size_th]
         else:
             th_str = ""
         self.ch.save_dataframe(stats_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}{th_str}_coordination_communities.csv")
-        self.lm.printl(f"{file_name}. compute_coordination_communities completed.")
+
+    def _top_community_dataframe(self, top_n: int) -> pd.DataFrame:
+        """
+        Return the top multiplex communities enriched with coordination statistics.
+
+        :param top_n: [int] Number of communities with the largest actor-layer count to keep.
+        :return: [pd.DataFrame] Top community dataframe.
+        """
+        coord_com = self.ch.read_dataframe(
+            f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_coordination_communities.csv",
+            dtype=dtype,
+        )
+        info_per_com = self.ch.read_dataframe(
+            f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_info_cda_per_community.csv",
+            dtype=dtype,
+        )
+        info_per_com = info_per_com.drop_duplicates(subset=["cid"], keep="last").copy()
+        coord_com = coord_com.drop_duplicates(subset=["community"], keep="last").copy()
+        info_per_com["cid"] = info_per_com["cid"].astype(str)
+        coord_com["community"] = coord_com["community"].astype(str)
+
+        merged_df = info_per_com.merge(coord_com, left_on="cid", right_on="community")
+        columns = ["cid", "numActorLayer", "numActors", "numLayers", "avg_weight", "median_weight", "std_weight"]
+        for column in columns:
+            if column != "cid":
+                merged_df[column] = pd.to_numeric(merged_df[column], errors="coerce")
+        return merged_df[columns].sort_values("numActorLayer", ascending=False).head(top_n)
 
     @log_method
-    def charactrize_url_layers_communities(self, top_n=10):
+    def save_top_communities_summary(self, top_n: int = 10) -> pd.DataFrame:
         """
-        Analyze URL behavior of top multiplex communities.
+        Save structural and edge-weight information for the top multiplex communities.
+
+        :param top_n: [int] Number of communities with the largest actor-layer count to save.
+        :return: [pd.DataFrame] Saved top-community summary dataframe.
         """
-        com_df_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]
+        top_communities_df = self._top_community_dataframe(top_n).round(3)
+        self.ch.save_dataframe(
+            top_communities_df,
+            f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_top_{top_n}_communities_summary.csv",
+        )
+        return top_communities_df
+
+    def _read_url_layer_dataframe(self, filename_stem: str, source: str) -> pd.DataFrame:
+        """
+        Read one URL co-action file and normalize columns needed for community URL analysis.
+
+        :param filename_stem: [str] Co-action filename stem, for example postURL.
+        :param source: [str] Output source label.
+        :return: [pd.DataFrame] URL dataframe with userId, domain, and source columns.
+        """
+        url_df = self.ch.read_dataframe(self._filtered_co_action_file_path(filename_stem), dtype=dtype)
+        url_df = url_df[["userId", "objectId"]].copy()
+        url_df["userId"] = url_df["userId"].astype(str)
+        url_df = url_df.rename(columns={"objectId": "domain"})
+        url_df["source"] = source
+        return url_df
+
+    def _assign_url_rows_to_top_communities(
+        self,
+        com_df: pd.DataFrame,
+        top_cids: Sequence[Any],
+        url_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Assign URL rows to the top communities containing the URL-sharing actors.
+
+        :param com_df: [pd.DataFrame] Multiplex community membership dataframe.
+        :param top_cids: [Sequence[Any]] Community ids to keep.
+        :param url_df: [pd.DataFrame] URL dataframe with userId, domain, and source columns.
+        :return: [pd.DataFrame] URL rows enriched with cid.
+        """
+        top_cids = [str(cid) for cid in top_cids]
+        com_df = com_df.copy()
+        com_df["cid"] = com_df["cid"].astype(str)
+        com_df["actor"] = com_df["actor"].astype(str)
+        actor_community = (
+            com_df[com_df["cid"].isin(top_cids)][["actor", "cid"]]
+            .drop_duplicates()
+            .rename(columns={"actor": "userId"})
+        )
+        actor_community["userId"] = actor_community["userId"].astype(str)
+        url_df = url_df.copy()
+        url_df["userId"] = url_df["userId"].astype(str)
+        merged_df = url_df.merge(actor_community, on="userId", how="inner")
+        self.lm.printl(
+            f"{file_name}. URL-community assignment: top_communities={len(top_cids)}, "
+            f"top_actors={actor_community['userId'].nunique()}, url_rows={len(url_df)}, matched_url_rows={len(merged_df)}"
+        )
+        return merged_df
+
+    @log_method
+    def charactrize_url_layers_communities(
+        self,
+        top_n: int = 10,
+        category_file: str | None = None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Analyze URL domain frequencies and domain-category percentages for top multiplex communities.
+
+        The method saves only post/comment-separated domain frequencies and post/comment-separated
+        category percentages for the selected top communities.
+
+        :param top_n: [int] Number of communities with the largest actor-layer count to analyze.
+        :param category_file: [str | None] Optional CSV file with domain,category columns.
+        :return: [tuple[pd.DataFrame, pd.DataFrame]] Domain-frequency and category-percentage dataframes.
+        """
+        com_df_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith(".csv")]
         com_df_filename = com_df_files[0]
         com_df = self.ch.read_dataframe(self.dm.path_user_dataframe + com_df_filename, dtype=dtype)
-        post_url = self.ch.read_dataframe(f"{self.data_path}{self.dataset_name}_postURL.csv", dtype=dtype)
-        comment_url = self.ch.read_dataframe(f"{self.data_path}{self.dataset_name}_commentURL.csv", dtype=dtype)
 
-        coord_com = self.ch.read_dataframe(f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_coordination_communities.csv", dtype=dtype)
-        info_per_com = self.ch.read_dataframe(f"{self.dm.path_community_analysis}{self.cda.get_algorithm_name()}_info_cda_per_community.csv", dtype=dtype)
-        
-         # ---------------------------------
-        # TOP COMMUNITIES
-        # ---------------------------------
-        merged_df = info_per_com.merge(coord_com,left_on="cid",right_on="community")
-        merged_df = merged_df[['cid', 'numActorLayer', 'numActors', 'numLayers', 'avg_weight', 'median_weight', 'std_weight']]
-        merged_df = merged_df.sort_values('numActorLayer', ascending=False)
-        top_merged_df = merged_df.head(top_n).round(3)
-        self.ch.save_dataframe(top_merged_df, self.dm.path_community_analysis + f"{self.cda.get_algorithm_name()}_top_{top_n}_communities_summary.csv", dtype=dtype)
-       
-        top_cids = top_merged_df['cid'].tolist()
+        top_communities_df = self._top_community_dataframe(top_n)
+        top_cids = top_communities_df["cid"].tolist()
 
-        results = {}
+        post_url = self._read_url_layer_dataframe("postURL", "postURL")
+        comment_url = self._read_url_layer_dataframe("commentURL", "commentURL")
+        url_df = pd.concat([post_url, comment_url], ignore_index=True)
+        url_df = self._assign_url_rows_to_top_communities(com_df, top_cids, url_df)
 
-        # ---------------------------------
-        # LOOP COMMUNITIES
-        # ---------------------------------
-        for cid in top_cids:
+        category_manager = DomainCategoryManager(category_file)
+        url_df["domain_clean"] = url_df["domain"].apply(category_manager.clean_domain)
+        url_df["domain_category"] = url_df["domain_clean"].apply(category_manager.categorize_domain)
 
-            # -----------------------------
-            # COMMUNITY MEMBERS
-            # -----------------------------
-            community_df = com_df[com_df["cid"] == cid]
-
-            actors = community_df["actor"].unique()
-
-            # -----------------------------
-            # FILTER URL DATA
-            # -----------------------------
-            post_url_com = post_url[
-                post_url["userId"].isin(actors)
-            ].copy()
-
-            comment_url_com = comment_url[
-                comment_url["userId"].isin(actors)
-            ].copy()
-
-            # -----------------------------
-            # DOMAIN FREQUENCIES
-            # -----------------------------
-            post_domain_freq = (
-                post_url_com["domainUrl"]
-                .value_counts()
-                .head(20)
+        domain_frequency_df = (
+            url_df
+            .groupby(["cid", "source", "domain_clean", "domain_category"], as_index=False, dropna=False)
+            .agg(
+                count=("domain_clean", "size"),
+                num_users=("userId", "nunique"),
             )
+        )
+        source_totals = domain_frequency_df.groupby(["cid", "source"])["count"].transform("sum")
+        domain_frequency_df["share"] = domain_frequency_df["count"] / source_totals
+        domain_frequency_df["rank"] = (
+            domain_frequency_df
+            .sort_values(["cid", "source", "count"], ascending=[True, True, False])
+            .groupby(["cid", "source"])
+            .cumcount()
+            + 1
+        )
+        domain_frequency_df = domain_frequency_df.sort_values(["cid", "source", "rank"])
 
-            comment_domain_freq = (
-                comment_url_com["domainUrl"]
-                .value_counts()
-                .head(20)
+        category_percentage_df = (
+            url_df
+            .groupby(["cid", "source", "domain_category"], as_index=False, dropna=False)
+            .agg(
+                count=("domain_category", "size"),
+                num_domains=("domain_clean", "nunique"),
+                num_users=("userId", "nunique"),
             )
+        )
+        category_totals = category_percentage_df.groupby(["cid", "source"])["count"].transform("sum")
+        category_percentage_df["percentage"] = category_percentage_df["count"] / category_totals
+        category_percentage_df = category_percentage_df.sort_values(
+            ["cid", "source", "percentage"],
+            ascending=[True, True, False],
+        )
 
-            all_url_com = pd.concat([
-                post_url_com,
-                comment_url_com
-            ])
-
-            total_domain_freq = (
-                all_url_com["domainUrl"]
-                .value_counts()
-                .head(20)
+        expected_category_rows = pd.DataFrame(
+            [
+                {
+                    "cid": str(cid),
+                    "source": source,
+                    "domain_category": "no_url",
+                    "count": 0,
+                    "num_domains": 0,
+                    "num_users": 0,
+                    "percentage": 0.0,
+                }
+                for cid in top_cids
+                for source in ["postURL", "commentURL"]
+            ]
+        )
+        existing_category_pairs = set(
+            zip(
+                category_percentage_df["cid"].astype(str),
+                category_percentage_df["source"].astype(str),
             )
-
-            # -----------------------------
-            # LAYER DISTRIBUTION
-            # -----------------------------
-            layer_distribution = (
-                community_df["layer"]
-                .value_counts()
-                .to_dict()
+        )
+        missing_category_rows = expected_category_rows[
+            ~expected_category_rows.apply(
+                lambda row: (str(row["cid"]), str(row["source"])) in existing_category_pairs,
+                axis=1,
             )
+        ]
+        category_percentage_df["cid"] = category_percentage_df["cid"].astype(str)
+        category_percentage_df = pd.concat(
+            [category_percentage_df, missing_category_rows],
+            ignore_index=True,
+        ).sort_values(["cid", "source", "percentage"], ascending=[True, True, False])
 
-            # -----------------------------
-            # COMMUNITY STATS
-            # -----------------------------
-            stats = (
-                merged_df[
-                    merged_df["cid"] == cid
-                ]
-                .iloc[0]
-                .to_dict()
-            )
+        output_prefix = f"{self.cda.get_algorithm_name()}_top_{top_n}_communities_url"
+        self.ch.save_dataframe(
+            domain_frequency_df,
+            f"{self.dm.path_community_analysis}{output_prefix}_domain_frequency.csv",
+        )
+        self.ch.save_dataframe(
+            category_percentage_df,
+            f"{self.dm.path_community_analysis}{output_prefix}_domain_category_percentage.csv",
+        )
 
-            # -----------------------------
-            # SAVE RESULTS
-            # -----------------------------
-            results[cid] = {
-                "stats": stats,
-                "num_unique_actors": community_df["actor"].nunique(),
-                "num_actor_layer": len(community_df),
-                "layer_distribution": layer_distribution,
-                "top_post_domains": post_domain_freq,
-                "top_comment_domains": comment_domain_freq,
-                "top_domains_overall": total_domain_freq
-            }
-
-        return results
-
+        return domain_frequency_df, category_percentage_df
 
     # def compute_ML_intra_inter_edge(self):
     #     graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_user_dataframe) if pos_csv.endswith('.csv')]

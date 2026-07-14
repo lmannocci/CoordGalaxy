@@ -1,274 +1,506 @@
+from __future__ import annotations
+
+from typing import Any
+
+from CharacterizationManager.CharacterizationManager import CharacterizationManager
+from CommunityDetectionManager.CommunityDetectionManager import CommunityDetectionManager
+from FilterGraphManager.FilterGraphManager import FilterGraphManager
 from InputManager import InputManager
+from LatexTableManager import LatexTableManager
+from NetworkManager import NetworkManager
+from Objects.CDAlgorithm.CDAlgorithm import CDAlgorithm
+from CommunityComparisonManager import CommunityComparisonManager
 from SelectionUserManager import SelectionUserManager
 from SimilarityFunctionManager import SimilarityFunctionManager
-from FilterGraphManager.FilterGraphManager import *
-from NetworkManager import NetworkManager
-from CommunityDetectionManager.CommunityDetectionManager import *
-from CharacterizationManager.CharacterizationManager import *
-from OverlappingCommunityManager.OverlappingCommunityManager import *
-from input_config_moltbook import *
-from utils.mainMethods import *
-from utils.Checkpoint.Checkpoint import *
+from configs import PipelineConfig, load_config
+from utils.Checkpoint.Checkpoint import Checkpoint
+from utils.LogManager.LogManager import LogManager
+from utils.pipeline_io import DatasetPaths, build_paths, read_original_file, read_temp_file
 
 
-absolute_path = os.path.dirname(__file__)
-results = os.path.join(absolute_path, f".{os.sep}results{os.sep}")
-data_path = os.path.join(absolute_path, f".{os.sep}data{os.sep}")
-path_dataset = os.path.join(data_path, f".{os.sep}{dataset_name}{os.sep}")
+SELECTED_DATASET = "moltbook"
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    lm = LogManager('main')
-    ch = Checkpoint()
-    
-    im = InputManager(dataset_name)
-
-    # NORMALIZATION
-    for file_prefix in ['comment','post']: #'comment', 
-        df = ch.read_dataframe(f"{path_dataset}1_moltbook_{file_prefix}.csv", dtype=dtype)
-        df = im.normalize_data(df, filename=f"moltbook_{file_prefix}Text.csv")
-
-        # EXTRACT URL, TEXT, REPLY
-        df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}Text.csv", dtype=dtype)
-        url_df = im.extract_url_dataset(df, f"moltbook_{file_prefix}URL.csv", known_url, parse_urls=False)
-        text_df = im.extract_text_dataset(df, f"moltbook_{file_prefix}Text.npy") # i save the embeddings in npy format
-        if file_prefix == 'comment':
-            df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}Text.csv", dtype=dtype)
-            reply_df = im.extract_reply_dataset(df, f"moltbook_comment.csv")
-
-        # CONVERSION MANAGER - DO NOT RUN IN GENERAL
-        df = ch.read_dataframe(f"{path_dataset}moltbook_{file_prefix}URL.csv", dtype=dtype) 
-        cm = ConversionManager()
-        df = cm.compress_user_ids(df)
-        ch.save_dataframe(df, f"{path_dataset}moltbook_{file_prefix}URL.csv")
-        df = ch.read_dataframe(f"{path_dataset}moltbook_comment.csv", dtype=dtype) 
-        if file_prefix == 'comment':
-            df = cm.compress_user_ids(df)
-            ch.save_dataframe(df, f"{path_dataset}moltbook_comment.csv")
+MOLTBOOK_INPUT_FILES = {
+    "comment": {
+        "raw": "comments.csv",
+        "normalized": "commentText.csv",
+        "url": "commentURL.csv",
+        "text_embedding": "commentText.npy",
+    },
+    "post": {
+        "raw": "posts.csv",
+        "normalized": "postText.csv",
+        "url": "postURL.csv",
+        "text_embedding": "postText.npy",
+    },
+}
+COMMENT_CO_ACTION_FILE = "comment.csv"
 
 
-    # COORDINATED BEHAVIOR BEGIN
-    # ------------------------------------------------------------------------------------------------------------------
+def preprocess_moltbook_input(config: PipelineConfig, paths: DatasetPaths, ch: Checkpoint, im: InputManager) -> None:
+    """
+    Normalize Moltbook source files and extract co-action artifacts.
 
-    # SIMILARITY
-    for ca in list_ca:
-        sm = SimilarityFunctionManager(dataset_name, user_fraction, type_filter, tw, ca, parallelize_window=70, text_similarity_threshold=text_similarity_threshold)
+    :param config: Pipeline configuration.
+    :param paths: Moltbook path bundle.
+    :param ch: Checkpoint instance.
+    :param im: InputManager configured for the Moltbook dataset.
+    :return: None. Normalized CSVs are saved in temp_data and co-action CSV/NPY files in co_action_data.
+    """
+    for file_type, filenames in MOLTBOOK_INPUT_FILES.items():
+        df = read_original_file(ch, paths, filenames["raw"])
+        im.normalize_data(df, filename=filenames["normalized"])
+
+        normalized_df = read_temp_file(ch, paths, filenames["normalized"])
+        im.extract_url_dataset(normalized_df, filenames["url"], config.known_url, parse_urls=False)
+        im.extract_text_dataset(normalized_df, filenames["text_embedding"])
+
+        if file_type == "comment":
+            im.extract_reply_dataset(normalized_df, COMMENT_CO_ACTION_FILE)
+
+
+def run_user_selection(config: PipelineConfig, lm: LogManager) -> None:
+    """
+    Analyze and optionally apply user selection.
+
+    :param config: Pipeline configuration.
+    :param lm: Log manager.
+    :return: None. Selection artifacts are saved by SelectionUserManager.
+    """
+    for selection_fraction in config.user_selection_fractions:
+        su = SelectionUserManager(config.dataset_name, selection_fraction, config.type_filter, config.co_action_list)
+        su.analyze_user_selection(config.filter_dataset)
+
+    if config.user_fraction is None:
+        lm.printl("main_moltbook. user_fraction=None, skipping user filtering and using all users.")
+        return
+
+    su = SelectionUserManager(config.dataset_name, config.user_fraction, config.type_filter, config.co_action_list)
+    su.plot_overlapping_percentage_users()
+    su.plot_number_users()
+    su.apply_user_selection(config.filter_dataset)
+
+
+def compute_similarity_edges(config: PipelineConfig) -> None:
+    """
+    Compute similarity edge lists for all configured co-actions.
+
+    :param config: Pipeline configuration.
+    :return: None. Similarity outputs are saved by SimilarityFunctionManager.
+    """
+    for ca in config.list_ca:
+        sm = SimilarityFunctionManager(
+            config.dataset_name,
+            config.user_fraction,
+            config.type_filter,
+            config.tw,
+            ca,
+            parallelize_window=config.similarity_parallelize_window,
+            text_similarity_threshold=config.text_similarity_threshold,
+            text_similarity_chunk_size=config.text_similarity_chunk_size,
+        )
         sm.compute_similarity()
-        sm.convert_ids_edge_list() # DO NOT RUN IN GENERAL
-
-    # # CHARACTERIZATION NO FILTER
-    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter)
-    chm.compute_threshold_statistics(2, 480, 5, 'nAction')
-    chm.plot_threshold_statistics('nAction', 10)
-    chm.select_threshold_statistics(0.04, 0.3, 0.02, False, 'nAction', 'node')
-    chm.select_threshold_statistics(10000, 20000, 1000, True, 'nAction', 'node')
-    chm.compute_metrics_networks(metrics_to_compute)
-
-    # FILTER NETWORKS - nAction
-    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
-    for ca in list_ca:
-        filter_instance = dict_ca_filter2[ca.get_co_action()]
-        fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
-        fm.filter_graph()
-
-    # CHARACTERIZATION ON FILTERED NETWORK with threshold on nAction, chosen by selecting about 20000 nodes on each layer
-    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter2)
-    chm.compute_threshold_statistics(0.01, 0.99, 0.01, 'w_')
-    chm.plot_threshold_statistics('w_', 0.01)
-    chm.select_threshold_statistics(10000, 100000, 10000, True, 'w_', 'edge')
-    chm.compute_metrics_networks(metrics_to_compute)
 
 
-    # # FILTER NETWORKS - weight
-    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
-    # weight_th = {"co-comment": 0.06, "co-commentText": 0.85, "co-commentURL": 0.32, "co-postText": 0.87, "co-postURL": 0.99}
-    for ca in list_ca:
-        filter_instance = dict_ca_filter3[ca.get_co_action()]
-        fm = FilterGraphManager(dataset_name, user_fraction, type_filter, tw, ca, filter_instance)
-        fm.filter_graph()
+def characterize_unfiltered_networks(config: PipelineConfig) -> None:
+    """
+    Characterize unfiltered similarity networks.
 
-    # # CHARACTERIZATION Compute metrics
-    chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3)
-    chm.compute_metrics_networks(metrics_to_compute)
+    :param config: Pipeline configuration.
+    :return: None. Characterization outputs are saved by CharacterizationManager.
+    """
+    chm = CharacterizationManager(
+        config.dataset_name,
+        config.user_fraction,
+        config.type_filter,
+        config.tw,
+        config.list_ca,
+        config.co_action_filters["no_filter"],
+    )
+    chm.compute_threshold_statistics(2, 480, 5, "nAction")
+    chm.plot_threshold_statistics("nAction", 10)
+    chm.select_threshold_statistics(0.04, 0.3, 0.02, False, "nAction", "node")
+    chm.select_threshold_statistics(10000, 20000, 1000, True, "nAction", "node")
+    chm.compute_network_metrics(config.metrics_to_compute)
 
-    # CREATE NETWORKS
-    nm = NetworkManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3)
+
+def filter_by_action_count_and_analyze_weight_thresholds(config: PipelineConfig) -> None:
+    """
+    Filter networks by action count and analyze weight thresholds.
+
+    :param config: Pipeline configuration.
+    :return: None. Filtered graphs and weight-threshold characterization outputs are saved.
+    """
+    action_filter = config.co_action_filters["n_action"]
+    fm = FilterGraphManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, action_filter)
+    fm.filter_graph()
+
+    chm = CharacterizationManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, action_filter)
+    chm.compute_threshold_statistics(0.01, 0.99, 0.01, "w_")
+    chm.plot_threshold_statistics("w_", 0.01)
+    chm.select_threshold_statistics(10000, 100000, 10000, True, "w_", "edge")
+    chm.compute_network_metrics(config.metrics_to_compute)
+
+
+def apply_final_network_filters(config: PipelineConfig) -> None:
+    """
+    Apply the final co-action filters.
+
+    :param config: Pipeline configuration.
+    :return: None. Filtered edge lists are saved by FilterGraphManager.
+    """
+    final_filter = config.co_action_filters["final"]
+    fm = FilterGraphManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, final_filter)
+    fm.filter_graph()
+
+
+def characterize_final_filtered_networks(config: PipelineConfig) -> None:
+    """
+    Compute network metrics for the final filtered co-action networks.
+
+    :param config: Pipeline configuration.
+    :return: None. Network metric tables are saved by CharacterizationManager.
+    """
+    final_filter = config.co_action_filters["final"]
+    chm = CharacterizationManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, final_filter)
+    chm.compute_network_metrics(config.metrics_to_compute)
+
+
+def create_final_network_artifacts(config: PipelineConfig) -> None:
+    """
+    Create weighted graph, multiplex graph, and Gephi artifacts.
+
+    :param config: Pipeline configuration.
+    :return: None. Network artifacts are saved by NetworkManager.
+    """
+    final_filter = config.co_action_filters["final"]
+    nm = NetworkManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, final_filter)
     nm.create_weighted_graph()
     nm.create_weighted_multiplex_network()
     nm.save_gephi_network()
 
-    chm.get_ML_summary()
+
+def compare_final_network_layers(config: PipelineConfig) -> None:
+    """
+    Compute and plot multiplex layer comparison for the final network.
+
+    :param config: Pipeline configuration.
+    :return: None. Layer-comparison outputs are saved by CharacterizationManager.
+    """
+    final_filter = config.co_action_filters["final"]
+    chm = CharacterizationManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, config.list_ca, final_filter)
     chm.get_ML_layer_comparison()
-    chm.plot_ML_layer_comparison()
 
-    # Selected thresholds: nAction_th = {"co-comment": 2, "co-commentText": 2, "co-commentURL": 2, "co-postText": 12, "co-postURL": 5}
-    # Weight thresholds: weight_th = {"co-comment": 0.06, "co-commentText": 0.85, "co-commentURL": 0.32, "co-postText": 0.87, "co-postURL": 0.99}
 
-    # COMMUNITY DETECTION SINGLE LAYER 
-    for algorithm, parameters_list in single_layer_algorithm_dict.items():
-        for param_tuple in parameters_list:
-            if algorithm == 'louvain':
-                cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-            elif algorithm == 'infomap':
-                cda = CDAlgorithm("infomap")
+def build_cda(algorithm: str, parameters: dict[str, Any] | None) -> CDAlgorithm:
+    """
+    Build a community-detection algorithm object from configured parameters.
 
-            for co_action, filter_instance in dict_ca_filter3.items():
-                dict_ca_filter = {co_action: filter_instance}
-                cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
+    :param algorithm: Algorithm name.
+    :param parameters: Parameter dictionary, or None for algorithms without parameters.
+    :return: CDAlgorithm instance.
+    """
+    if parameters is None:
+        return CDAlgorithm(algorithm)
+    return CDAlgorithm(algorithm, parameters)
+
+
+def run_single_layer_community_detection(config: PipelineConfig) -> None:
+    """
+    Run community detection and characterization independently for each filtered co-action layer.
+
+    :param config: Pipeline configuration.
+    :return: None. Community outputs are saved by the community managers.
+    """
+    ca_by_name = {ca.get_co_action(): ca for ca in config.list_ca}
+    final_filter = config.co_action_filters["final"]
+
+    for algorithm, parameters_list in config.single_layer_algorithm_dict.items():
+        for parameters in parameters_list:
+            cda = build_cda(algorithm, parameters)
+
+            for co_action, filter_instance in final_filter.items():
+                single_layer_ca = [ca_by_name[co_action]]
+                single_layer_filter = {co_action: filter_instance}
+
+                cdm = CommunityDetectionManager(
+                    config.dataset_name,
+                    config.user_fraction,
+                    config.type_filter,
+                    config.tw,
+                    single_layer_ca,
+                    single_layer_filter,
+                    cda,
+                )
                 cdm.compute_community_detection()
-                
-                chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda)
-                chm.compute_statistics_communities()
+
+                chm = CharacterizationManager(
+                    config.dataset_name,
+                    config.user_fraction,
+                    config.type_filter,
+                    config.tw,
+                    single_layer_ca,
+                    single_layer_filter,
+                    cda,
+                )
+                chm.compute_community_summary_statistics()
                 chm.compute_metrics_communities(70)
-                chm.compute_node_metrics(metrics=metrics_node_to_compute)
+                chm.compute_network_node_metrics(metrics=config.metrics_node_to_compute)
                 chm.validate_communities()
-                chm.compute_coordination_communities()
-
-    # from input_config_IORussia import * # I have to re-import it because of the previous for loops, where I overwrite dict_ca_filter ---> dict_ca_filter = {co_action: filter_instance}
-    # # MULTIMODAL COMMUNITY DETECTION AND CHARACTERIZATION
-    for algorithm, parameters_list in parameters_dict.items():
-        for param_tuple in parameters_list:
-            cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-            cdm = CommunityDetectionManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3, cda)
-            cdm.compute_community_detection()
-            
-            chm = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter3, cda)
-            chm.compute_info_communities()
-            chm.compute_statistics_communities()
-            #  chm.delete_edges_visualize_multiplex_network()
-
-            chm.compute_node_metrics(metrics=metrics_node_to_compute) # Only for flattened algorithms, not for multilayer ones
-            chm.validate_communities() # for all algorithms except flat_and_weighted_sum_louvain, flat_and_weighted_sum_infomap
-            chm.compute_coordination_communities()
-            chm.charactrize_url_layers_communities()
-
-    # # OVERLAPPING COMMUNITIES
-    # # multicoaction / flattened network vs single layer
-    # for single_algorithm in single_layer_algorithm_dict.keys(): # 'louvain', 'infomap'
-    #     for algorithm, parameters_list in parameters_dict.items(): # 
-    #         if single_algorithm in algorithm:   # compare louvain with glouvain, flat_sum_weighted_louvain, flat_ec_louvain, flat_nw_louvain 
-    #                                             #  and infomap with glinfomap, flat_sum_weighted_infomap, flat_ec_infomap, flat_nw_infomap
-    #             for param_tuple in parameters_list:
-    #                 cda_x = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-    #                 chm_x = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, cda_x)
-    #                 # single layer network
-    #                 for co_action_y in co_action_list:
-    #                     list_ca_y = [CoAction(co_action_y, "tfidf_cosine_similarity")]
-    #                     filter_instance_y = Filter("median", weight_th[co_action_y], Filter("merge_filter_action", nAction_th[co_action_y], None))
-    #                     dict_ca_filter_y = {co_action_y: filter_instance_y}
-                        
-    #                     if single_algorithm == 'louvain':
-    #                         cda_y = CDAlgorithm("louvain", {"resolution": 1})
-    #                         prefix = 'louvain_resolution_1'
-    #                     elif single_algorithm == 'infomap':
-    #                         cda_y = CDAlgorithm("infomap")
-    #                         prefix = 'infomap'
-
-    #                     chm_y = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca_y, dict_ca_filter_y, cda_y)
-    #                     ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, chm_x=chm_x, chm_y=chm_y)
-    #                     lm.printl(f"Overlapping between {algorithm} {param_tuple} and {single_algorithm} on {co_action_y}")
-    #                     ocm.compute_overlapping(save_overlapping_tensor=True, save_intersections=True)
-                        
-                
-    # # single layer network vs single layer network
-    # for single_algorithm in single_layer_algorithm_dict.keys(): # 'louvain', 'infomap'
-    #     for co_action_x in co_action_list:
-    #             list_ca_x = [CoAction(co_action_x, "tfidf_cosine_similarity")]
-    #             filter_instance_x = Filter("median", weight_th[co_action_x],Filter("merge_filter_action", nAction_th[co_action_x], None))
-    #             dict_ca_filter_y = {co_action_x: filter_instance_x}
-    #             if single_algorithm == 'louvain':
-    #                 cda_x = CDAlgorithm("louvain", {"resolution": 1})
-    #             elif single_algorithm == 'infomap':
-    #                 cda_x = CDAlgorithm("infomap")
-    #             chm_x = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca_x, dict_ca_filter_y, cda_x)
-    #             # single layer network
-    #             for co_action_y in co_action_list:
-    #                 list_ca_y = [CoAction(co_action_y, "tfidf_cosine_similarity")]
-    #                 filter_instance_y = Filter("median", weight_th[co_action_y], Filter("merge_filter_action", nAction_th[co_action_y], None))
-    #                 dict_ca_filter_y = {co_action_y: filter_instance_y}
-    #                 if single_algorithm == 'louvain':
-    #                     cda_y = CDAlgorithm("louvain", {"resolution": 1})
-    #                     prefix = 'louvain_resolution_1'
-    #                 elif single_algorithm == 'infomap':
-    #                     cda_y = CDAlgorithm("infomap")
-    #                     prefix = 'infomap'
-    #                 chm_y = CharacterizationManager(dataset_name, user_fraction, type_filter, tw, list_ca_y, dict_ca_filter_y, cda_y)
-    #                 ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, chm_x=chm_x, chm_y=chm_y)
-    #                 lm.printl(f"Overlapping between {single_algorithm} {co_action_x} and {single_algorithm} on {co_action_y}")
-    #                 ocm.compute_overlapping(save_overlapping_tensor=True, save_intersections=True)
-                    
-    #                 # ocm.compute_single_layer_NMI() # community_size_th=None
-
-    #                 #  # community_size_th=None must be put only for single_layer_NMI, which can be interesting computing on the whole sets of communities
-    #                 ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, chm_x=chm_x, chm_y=chm_y, community_size_th=70)
-    #                 ocm.compute_single_layer_NMI() # community_size_th=200
+                chm.compute_community_edge_weight_statistics()
 
 
-    # for single_algorithm in single_layer_algorithm_dict.keys(): # 'louvain_resolution_1',
-    #     if single_algorithm == 'louvain':
-    #         cda = CDAlgorithm("louvain", {"resolution": 1})
-    #         prefix = 'louvain_resolution_1'
-    #     elif single_algorithm == 'infomap':
-    #         cda = CDAlgorithm("infomap")
-    #         prefix = 'infomap'
+def build_multiplex_characterization_manager(config: PipelineConfig, cda: CDAlgorithm) -> CharacterizationManager:
+    """
+    Build a CharacterizationManager for the final Moltbook multiplex network.
 
-    #     ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix)
-    #     ocm_th = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, community_size_th=70)
-        
-    #     ocm.plot_heatmap_single_layer_NMI()
-    #     ocm.combine_coordination_communities(cda) # combine the single layer coordination communities weight info (then I combine also the multimodal coordination communities in the following lines)
-    #     ocm.combine_validation_communities(cda) # for all algorithms except flat_and_weighted_sum_louvain, flat_and_weighted_sum_infomap
+    :param config: Pipeline configuration.
+    :param cda: Community-detection algorithm object.
+    :return: CharacterizationManager configured for multiplex community outputs.
+    """
+    return CharacterizationManager(
+        config.dataset_name,
+        config.user_fraction,
+        config.type_filter,
+        config.tw,
+        config.list_ca,
+        config.co_action_filters["final"],
+        cda,
+    )
 
-    #     # ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, community_size_th=70)
-    #     ocm_th.plot_heatmap_single_layer_NMI()
-    #     ocm_th.plot_heatmap_overlapping_matrix()
-    #     for mid_th in [0.5, 0.7, 0.9]:
-    #         ocm_th.plot_stacked_flux(type_aggregation='communities', mid_th=mid_th, metric='harmonicMean', plot_heatmap_list=None)
-    #     ocm_th.plot_stacked_flux(type_aggregation='users', metric='absolute', plot_heatmap_list=None)
 
-    #     # COMBINE SINGLE LAYERS METRIC COMMUNITIES AND NODES
-    #     ocm_th.combine_single_layer_metrics_communities(cda)
-        
-    #     ocm_th.combine_node_metrics(cda) # combine the metrics of the nodes of the 5 co-actions + in the following lines the multimodal ones
+def run_multiplex_community_detection(config: PipelineConfig) -> None:
+    """
+    Run multiplex community detection.
 
-    #     # combine the metrics of the nodes of the flattened networks
-    #     for algorithm, parameters_list in parameters_dict.items():
-    #         for param_tuple in parameters_list:
-    #             cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
+    :param config: Pipeline configuration.
+    :return: None. Community outputs are saved by CommunityDetectionManager.
+    """
+    for algorithm, parameters_list in config.multiplex_algorithm_dict.items():
+        for parameters in parameters_list:
+            cda = build_cda(algorithm, parameters)
+            # final_filter = config.co_action_filters["final"]
+            # cdm = CommunityDetectionManager(
+            #     config.dataset_name,
+            #     config.user_fraction,
+            #     config.type_filter,
+            #     config.tw,
+            #     config.list_ca,
+            #     final_filter,
+            #     cda,
+            # )
+            # cdm.compute_community_detection()
+
+def characterize_multiplex_communities(config: PipelineConfig, top_n: int = 10) -> None:
+    """
+    Characterize already-computed multiplex community outputs.
+
+    :param config: Pipeline configuration.
+    :param top_n: Number of top communities included in top-community outputs.
+    :return: None. Characterization CSV outputs are saved by CharacterizationManager.
+    """
+    for algorithm, parameters_list in config.multiplex_algorithm_dict.items():
+        for parameters in parameters_list:
+            cda = build_cda(algorithm, parameters)
+            chm = build_multiplex_characterization_manager(config, cda)
+            # chm.compute_multiplex_community_membership_summary()
+            # chm.compute_community_summary_statistics()
+            # chm.compute_network_node_metrics(metrics=config.metrics_node_to_compute)
+            # chm.validate_communities()
+            # chm.compute_community_edge_weight_statistics()
+            # chm.save_top_communities_summary(top_n=top_n)
+            chm.charactrize_url_layers_communities(top_n=top_n)
+
+
+def generate_latex_tables(config: PipelineConfig, top_n: int = 10) -> None:
+    """
+    Generate predefined LaTeX tables from characterization CSV outputs.
+
+    :param config: Pipeline configuration.
+    :param top_n: Number of top communities included in the table.
+    :return: None. LaTeX files are saved in each community analysis directory.
+    """
+    for algorithm, parameters_list in config.multiplex_algorithm_dict.items():
+        for parameters in parameters_list:
+            cda = build_cda(algorithm, parameters)
+            ltm = LatexTableManager(
+                config.dataset_name,
+                config.user_fraction,
+                config.type_filter,
+                config.tw,
+                config.list_ca,
+                config.co_action_filters["final"],
+                cda,
+            )
+            # ltm.build_top_communities_structural_table(top_n=top_n)
+            ltm.build_url_category_composition_table(top_n=top_n)
+
+
+
+
+def build_single_layer_characterization_manager(
+    config: PipelineConfig,
+    co_action: str,
+    cda: CDAlgorithm,
+) -> CharacterizationManager:
+    """
+    Build a CharacterizationManager for one final filtered co-action layer.
+
+    :param config: Pipeline configuration.
+    :param co_action: Canonical co-action id.
+    :param cda: Community-detection algorithm object.
+    :return: CharacterizationManager for one single-layer community result.
+    """
+    list_ca = [ca for ca in config.list_ca if ca.get_co_action() == co_action]
+    dict_ca_filter = {co_action: config.co_action_filters["final"][co_action]}
+    return CharacterizationManager(config.dataset_name, config.user_fraction, config.type_filter, config.tw, list_ca, dict_ca_filter, cda)
+
+
+def build_community_comparison_manager(
+    config: PipelineConfig,
+    file_prefix: str,
+    community_size_th: int | None = None,
+) -> CommunityComparisonManager:
+    """
+    Build the front-end manager used to compare community outputs.
+
+    :param config: Pipeline configuration.
+    :param file_prefix: Prefix used for comparison output filenames.
+    :param community_size_th: Optional minimum community size.
+    :return: CommunityComparisonManager instance.
+    """
+    return CommunityComparisonManager(
+        config.dataset_name,
+        config.user_fraction,
+        config.type_filter,
+        config.tw,
+        config.list_ca,
+        config.co_action_filters["final"],
+        file_prefix,
+        community_size_th=community_size_th,
+    )
+
+
+def compute_multiplex_single_layer_overlaps(config: PipelineConfig) -> None:
+    """
+    Compare each compatible multiplex/flattened community output against each single-layer output.
+
+    :param config: Pipeline configuration.
+    :return: None. Overlap tensors are saved by CommunityComparisonManager.
+    """
+    for single_algorithm in config.single_layer_algorithm_dict.keys():
+        for algorithm, parameters_list in config.multiplex_algorithm_dict.items():
+            if single_algorithm not in algorithm:
+                continue
+            for parameters in parameters_list:
+                cda_x = build_cda(algorithm, parameters)
+                chm_x = build_multiplex_characterization_manager(config, cda_x)
+                for co_action_y in config.co_action_list:
+                    cda_y = build_cda(single_algorithm, {"resolution": 1} if single_algorithm == "louvain" else None)
+                    prefix = "louvain_resolution_1" if single_algorithm == "louvain" else "infomap"
+                    chm_y = build_single_layer_characterization_manager(config, co_action_y, cda_y)
+                    comparison_manager = build_community_comparison_manager(config, prefix)
+                    comparison_manager.compute_overlap(
+                        chm_x,
+                        chm_y,
+                        save_overlapping_tensor=True,
+                        save_intersections=True,
+                    )
+
+
+def compute_single_layer_overlaps(config: PipelineConfig, community_size_th: int = 70) -> None:
+    """
+    Compare every pair of single-layer community outputs and compute NMI for size-filtered comparisons.
+
+    :param config: Pipeline configuration.
+    :param community_size_th: Minimum community size for NMI.
+    :return: None. Overlap tensors and NMI outputs are saved by CommunityComparisonManager.
+    """
+    for single_algorithm in config.single_layer_algorithm_dict.keys():
+        cda = build_cda(single_algorithm, {"resolution": 1} if single_algorithm == "louvain" else None)
+        prefix = "louvain_resolution_1" if single_algorithm == "louvain" else "infomap"
+        for co_action_x in config.co_action_list:
+            chm_x = build_single_layer_characterization_manager(config, co_action_x, cda)
+            for co_action_y in config.co_action_list:
+                chm_y = build_single_layer_characterization_manager(config, co_action_y, cda)
+                comparison_manager = build_community_comparison_manager(config, prefix)
+                comparison_manager.compute_overlap(
+                    chm_x,
+                    chm_y,
+                    save_overlapping_tensor=True,
+                    save_intersections=True,
+                )
+                thresholded_comparison_manager = build_community_comparison_manager(config, prefix, community_size_th)
+                thresholded_comparison_manager.compute_single_layer_nmi(chm_x, chm_y)
+
+
+def plot_and_combine_overlapping_outputs(config: PipelineConfig, community_size_th: int = 70) -> None:
+    """
+    Plot and combine outputs generated by the overlapping-community comparison steps.
+
+    :param config: Pipeline configuration.
+    :param community_size_th: Minimum community size used in size-filtered plots.
+    :return: None. Plots and combined CSVs are saved by CommunityComparisonManager.
+    """
+    for single_algorithm in config.single_layer_algorithm_dict.keys():
+        cda = build_cda(single_algorithm, {"resolution": 1} if single_algorithm == "louvain" else None)
+        prefix = "louvain_resolution_1" if single_algorithm == "louvain" else "infomap"
+        comparison = build_community_comparison_manager(config, prefix)
+        comparison_th = build_community_comparison_manager(config, prefix, community_size_th)
+
+        comparison.plot_overlap_heatmaps()
+        comparison.combine_coordination_communities(cda)
+        comparison.combine_validation_communities(cda)
+        comparison_th.plot_overlap_heatmaps()
+        for mid_th in [0.5, 0.7, 0.9]:
+            comparison_th.plot_stacked_flux(type_aggregation="communities", mid_th=mid_th, metric="harmonicMean")
+        comparison_th.plot_stacked_flux(type_aggregation="users", metric="absolute")
+
+        comparison_th.combine_single_layer_metrics_communities(cda)
+        comparison_th.combine_node_metrics(cda)
+        comparison_th.plot_boxplot_metrics_gained_lost_nodes()
+        comparison_th.plot_single_layer_metrics("cosine_similarity")
+        comparison_th.plot_barchart_cosine_similarity()
+        comparison_th.plot_single_layer_metrics("umap")
+        comparison_th.plot_single_layer_metrics("t_sne")
+        comparison_th.plot_single_layer_metrics("pca")
+        comparison_th.plot_single_layer_metrics("starplot", type_visualization_starplot="grid")
+        comparison_th.plot_single_layer_metrics("starplot", type_visualization_starplot="single")
+        comparison_th.compute_coordination_by_label()
+        comparison_th.compute_validation_by_label()
+
+
+def run_pipeline(config: PipelineConfig) -> None:
+    """
+    Run the Moltbook pipeline until community characterization.
+
+    :param config: Pipeline configuration.
+    :return: None. Artifacts are saved in the configured dataset result directories.
+    """
+    lm = LogManager("main")
+    ch = Checkpoint()
+    paths = build_paths(config.dataset_name)
+    im = InputManager(config.dataset_name)
+
+    # preprocess_moltbook_input(config, paths, ch, im)
+    # run_user_selection(config, lm)
+    # compute_similarity_edges(config)
+    # characterize_unfiltered_networks(config)
+    # filter_by_action_count_and_analyze_weight_thresholds(config)
+    # apply_final_network_filters(config)
+    # characterize_final_filtered_networks(config)
+    # create_final_network_artifacts(config)
+    # compare_final_network_layers(config)
+    # run_single_layer_community_detection(config)
+    # run_multiplex_community_detection(config)
+    characterize_multiplex_communities(config, top_n=10)
+    generate_latex_tables(config, top_n=10)
+
     
-    #             # compare louvain with glouvain, flat_sum_weighted_louvain, flat_ec_louvain, flat_nw_louvain 
-    #             #  and infomap with glinfomap, flat_sum_weighted_infomap, flat_ec_infomap, flat_nw_infomap
-    #             if single_algorithm in algorithm:  
-    #                 ocm_th.combine_node_metrics(cda)
-    #                 ocm = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix) # without community_size_th
-    #                 ocm.combine_coordination_communities(cda)
-    #                 ocm.combine_validation_communities(cda) # for all algorithms except flat_and_weighted_sum_louvain, flat_and_weighted_sum_infomap
-        
-    #     # ocm_th = OverlappingCommunityManager(dataset_name, user_fraction, type_filter, tw, list_ca, dict_ca_filter, prefix, community_size_th=70)
-    #     # BOX PLOT METRICS LOST COMMON GAINED NODES
-    #     ocm_th.plot_boxplot_metrics_gained_lost_nodes()
-
-    #     # COMPARISON SINGLE LAYERS METRIC COMMUNITIES
-    #     ocm_th.plot_single_layer_metrics('cosine_similarity')
-    #     ocm_th.plot_barchart_cosine_similarity()
-    #     ocm_th.plot_single_layer_metrics('umap')
-    #     ocm_th.plot_single_layer_metrics('t_sne')
-    #     ocm_th.plot_single_layer_metrics('pca')
-    #     ocm_th.plot_single_layer_metrics('starplot', type_visualization_starplot='grid')
-    #     ocm_th.plot_single_layer_metrics('starplot', type_visualization_starplot='single')
-    #     ocm_th.compute_coordination_by_label()
-    #     ocm_th.compute_validation_by_label()
-        
-    #     # PLOT MULTIMODAL COORDINATION VALIDATION (i compare only multimodal and flat_weighted_sum_louvain/infomap)
-    #     for algorithm, parameters_list in parameters_dict.items():
-    #         if (algorithm == 'flat_weighted_sum_louvain' or algorithm == 'flat_weighted_sum_infomap') and single_algorithm in algorithm:
-    #             for param_tuple in parameters_list:
-    #                 lm.printl(f"Plotting {algorithm} {param_tuple} coordination by label against {single_algorithm}")
-    #                 cda = CDAlgorithm(algorithm, get_algorithm_param(algorithm, param_tuple))
-    #                 ocm_th.plot_validation_multimodal(cda)
-    #                 ocm_th.plot_coordination_by_label(cda)
+    # compute_multiplex_single_layer_overlaps(config)
+    # compute_single_layer_overlaps(config, community_size_th=70)
+    # plot_and_combine_overlapping_outputs(config, community_size_th=70)
 
 
-
-
-
+if __name__ == "__main__":
+    run_pipeline(load_config(SELECTED_DATASET))

@@ -5,6 +5,7 @@ from utils.common_variables import *
 from utils.PlotManager.PlotManager import *
 from utils.Checkpoint.Checkpoint import *
 from utils.ConversionManager.ConversionManager import *
+from utils.decorator_definition import log_method
 
 import os
 import networkx as nx
@@ -12,6 +13,7 @@ import numpy as np
 import pandas as pd
 import time
 from cdlib import evaluation, NodeClustering
+from typing import Any, Sequence
 
 absolute_path = os.path.dirname(__file__)
 file_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -19,7 +21,31 @@ results = os.path.join(absolute_path, f"..{os.sep}results{os.sep}")
 
 
 class SingleLayerCommunitiesEvaluation:
-    def __init__(self, dataset_name, user_fraction, type_filter, list_ca, dict_ca_filter, icm, dm, type_algorithm, cda):
+    def __init__(
+        self,
+        dataset_name: str,
+        user_fraction: float | None,
+        type_filter: str | None,
+        list_ca: Sequence[Any],
+        dict_ca_filter: dict[str, Any],
+        icm: Any,
+        dm: DirectoryManager,
+        type_algorithm: str,
+        cda: Any,
+    ) -> None:
+        """
+            Create the evaluator for single-layer and flattened community outputs.
+            :param dataset_name: Dataset directory name.
+            :param user_fraction: User-selection fraction used in path resolution.
+            :param type_filter: User-selection strategy name.
+            :param list_ca: Co-action objects included in the characterization.
+            :param dict_ca_filter: Filter configuration by co-action id.
+            :param icm: Integrity constraint manager.
+            :param dm: Directory manager with community-analysis paths.
+            :param type_algorithm: Algorithm type detected by DirectoryManager.
+            :param cda: Community-detection algorithm configuration.
+            :return: None.
+        """
         self.lm = LogManager('main')
         self.ch = Checkpoint()
         self.cm = ConversionManager()
@@ -41,13 +67,24 @@ class SingleLayerCommunitiesEvaluation:
 
         self.ce = CommunitiesEvaluation(self.lm)
 
-    def __plot_size_communities(self, df):
+    def _plot_size_communities(self, df: pd.DataFrame) -> None:
+        """
+            Plot the community-size distribution.
+            :param df: Dataframe with group and nUsers columns.
+            :return: None. Plot is saved to the community analysis directory.
+        """
         self.pm.plot_line(self.dm.path_community_analysis, self.type_ca, df['group'], df['nUsers'], "group", 'nUsers',
                           'Size communities distribution', "size_communities_distribution.png",
                           marker='o', markersize=3)
 
     # Function to get nodes by community
-    def __get_community_nodes(self, graph, community_label="group"):
+    def _get_community_nodes(self, graph: nx.Graph, community_label: str = "group") -> dict[Any, list[Any]]:
+        """
+            Group graph nodes by their community attribute.
+            :param graph: NetworkX graph with a community attribute on nodes.
+            :param community_label: Node attribute containing the community id.
+            :return: Dictionary mapping community id to node list.
+        """
         communities = {}
         for node, data in graph.nodes(data=True):
             community = data.get(community_label)
@@ -56,11 +93,149 @@ class SingleLayerCommunitiesEvaluation:
             communities[community].append(node)
         return communities
 
+
+    def _filtered_co_action_file_path(self, action_name: str) -> str:
+        """
+            Return the filtered co-action file path, preferring the dataset-directory scoped filename template.
+            :param action_name: [str] Co-action filename stem.
+            :return: [str] Path to the filtered co-action CSV.
+        """
+        co_action_data_path = self._co_action_data_path()
+        filename = f"{action_name}.csv"
+        path = f"{co_action_data_path}{filename}"
+        if os.path.exists(path):
+            return path
+
+        legacy_filename = f"{self.dataset_name}_{action_name}.csv"
+        legacy_path = f"{co_action_data_path}{legacy_filename}"
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+        if self.user_fraction is not None:
+            old_filtered_filename = f"{self.user_fraction}_{self.type_filter}_{action_name}.csv"
+            old_filtered_path = f"{self.dm.path_co_action_data}{old_filtered_filename}"
+            if os.path.exists(old_filtered_path):
+                return old_filtered_path
+
+            old_legacy_filename = f"{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{action_name}.csv"
+            old_legacy_path = f"{self.dm.path_co_action_data}{old_legacy_filename}"
+            if os.path.exists(old_legacy_path):
+                return old_legacy_path
+
+        return legacy_path
+
+    def _co_action_data_path(self) -> str:
+        """
+            Return the directory to read co-action artifacts from.
+            :return: [str] Selected-user co-action directory when present, otherwise the base co_action_data directory.
+        """
+        filtered_path = self.dm.get_co_action_data_path(self.user_fraction, self.type_filter)
+        if self.user_fraction is not None and os.path.isdir(filtered_path):
+            return filtered_path
+        return self.dm.path_co_action_data
+
+    def _has_is_control_label(self, data_df: pd.DataFrame, context: str) -> bool:
+        """
+            Check whether the dataframe includes the optional isControl validation label.
+            :param data_df: [pd.DataFrame] Source co-action dataframe.
+            :param context: [str] Description of the input being validated, used in log messages.
+            :return: [bool] True when isControl is available, otherwise False.
+        """
+        if "isControl" in data_df.columns:
+            return True
+        self.lm.printl(f"{file_name}. validate_communities skipped: isControl label not found in {context}.")
+        return False
+
+    def _normalize_is_control_column(self, data_df: pd.DataFrame, context: str) -> pd.DataFrame:
+        """
+            Normalize the isControl label to boolean values before validation.
+            :param data_df: [pd.DataFrame] Dataframe containing an isControl column.
+            :param context: [str] Description of the input being normalized, used in error messages.
+            :return: [pd.DataFrame] Copy of the dataframe with boolean isControl values.
+        """
+        normalized_df = data_df.copy()
+        if pd.api.types.is_bool_dtype(normalized_df["isControl"]):
+            normalized_df["isControl"] = normalized_df["isControl"].astype(bool)
+            return normalized_df
+
+        true_values = {"true", "1", "yes", "y", "control"}
+        false_values = {"false", "0", "no", "n", "coord", "coordinated"}
+
+        def normalize_value(value: Any) -> bool | None:
+            """
+                Convert one label value to bool when it matches a supported encoding.
+                :param value: [Any] Raw isControl value.
+                :return: [bool | None] Boolean value, or None when the value is unknown.
+            """
+            if pd.isna(value):
+                return None
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, np.integer)):
+                if value == 1:
+                    return True
+                if value == 0:
+                    return False
+            value_str = str(value).strip().lower()
+            if value_str in true_values:
+                return True
+            if value_str in false_values:
+                return False
+            return None
+
+        converted = normalized_df["isControl"].map(normalize_value)
+        if converted.isna().any():
+            invalid_values = sorted(normalized_df.loc[converted.isna(), "isControl"].dropna().astype(str).unique())
+            message = f"{file_name}. Unknown isControl values in {context}: {invalid_values}"
+            self.lm.printl(message)
+            raise ValueError(message)
+
+        normalized_df["isControl"] = converted.astype(bool)
+        return normalized_df
+
+    def _build_label_count_dataframe(self, post_df: pd.DataFrame, groupby_columns: list[str]) -> pd.DataFrame:
+        """
+            Count control and coordinated users for each validation group.
+            :param post_df: [pd.DataFrame] Community dataframe with a boolean isControl column.
+            :param groupby_columns: [list[str]] Columns used for grouping, excluding isControl.
+            :return: [pd.DataFrame] Counts and percentages for control and coordinated users.
+        """
+        group_counts = (
+            post_df.groupby(groupby_columns + ["isControl"])
+            .size()
+            .unstack("isControl", fill_value=0)
+        )
+        for label_value in [True, False]:
+            if label_value not in group_counts.columns:
+                group_counts[label_value] = 0
+
+        group_counts = group_counts.reindex(columns=[True, False], fill_value=0)
+        group_counts = group_counts.rename(columns={True: "nControl", False: "nCoord"}).reset_index()
+        group_counts["nTotal"] = group_counts["nControl"] + group_counts["nCoord"]
+        group_counts["percControl"] = group_counts["nControl"] / group_counts["nTotal"]
+        group_counts["percCoord"] = group_counts["nCoord"] / group_counts["nTotal"]
+        group_counts["purity"] = group_counts[["nControl", "nCoord"]].max(axis=1) / group_counts["nTotal"]
+        return group_counts
+
+    def _safe_ratio(self, numerator: int | float, denominator: int | float) -> float:
+        """
+            Divide two values and return 0.0 when the denominator is zero.
+            :param numerator: [int | float] Numerator.
+            :param denominator: [int | float] Denominator.
+            :return: [float] Ratio value.
+        """
+        if denominator == 0:
+            return 0.0
+        return numerator / denominator
+
     # PUBLIC
     # ------------------------------------------------------------------------------------------------------------------
-    def compute_statistics_communities(self):
-        self.lm.printl(f"{file_name}. compute_statistics_communities start.")
-
+    @log_method
+    def compute_community_summary_statistics(self) -> None:
+        """
+            Compute descriptive statistics for single-layer communities.
+            :return: None. Statistics and plots are saved to the community analysis directory.
+        """
         df = self.ch.read_dataframe(self.dm.path_user_dataframe + "com_df.csv", dtype=dtype)
         agg_df = df.groupby(['group']).size().reset_index(name='nUsers')
         info_com_df = agg_df['nUsers'].describe(
@@ -77,14 +252,24 @@ class SingleLayerCommunitiesEvaluation:
 
         self.ch.save_dataframe(info_com_df, self.dm.path_community_analysis + f"{repr(self.cda)}_statistics_communities.csv")
 
-        self.__plot_size_communities(agg_df)
-
-        self.lm.printl(f"{file_name}. compute_statistics_communities completed.")
+        self._plot_size_communities(agg_df)
 
     # Optimized function to calculate community metrics with timing and progress messages
-    def compute_metrics_communities(self, community_size_th, community_label="group", weight_label="w_"):
+    @log_method
+    def compute_metrics_communities(
+        self,
+        community_size_th: int,
+        community_label: str = "group",
+        weight_label: str = "w_"
+    ) -> None:
+        """
+            Compute graph metrics for communities above a size threshold.
+            :param community_size_th: Minimum community size to include.
+            :param community_label: Node attribute containing the community id.
+            :param weight_label: Edge attribute containing edge weights.
+            :return: None. Metrics are saved to the community analysis directory.
+        """
         type_ca = self.list_ca[0].get_co_action()
-        self.lm.printl(f"{file_name}. compute_metrics_community co-action: {type_ca} started.")
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_community_graph) if
                        pos_csv.endswith('.p')]
         net_filename = graph_files[0]
@@ -92,7 +277,7 @@ class SingleLayerCommunitiesEvaluation:
         # read single network
         G = self.ch.load_object(self.dm.path_community_graph + net_filename)
 
-        communities = self.__get_community_nodes(G, community_label)
+        communities = self._get_community_nodes(G, community_label)
         metrics = []
         total_weight = G.size(weight=weight_label)
 
@@ -182,14 +367,24 @@ class SingleLayerCommunitiesEvaluation:
 
         self.ch.save_dataframe(df_metrics, self.dm.path_community_analysis + f"{type_ca}_th_size_{str(community_size_th)}_metrics_communities.csv")
 
-        self.lm.printl(f"{file_name}. compute_metrics_community co-action: {type_ca} completed.")
-
-    def compute_coordination_communities(self, community_size_th, community_label, weight_label):
+    @log_method
+    def compute_community_edge_weight_statistics(
+        self,
+        community_size_th: int | None,
+        community_label: str,
+        weight_label: str
+    ) -> None:
+        """
+            Compute edge-weight coordination statistics for each community.
+            :param community_size_th: Minimum community size to include, or None to include all communities.
+            :param community_label: Node attribute containing the community id.
+            :param weight_label: Edge attribute containing edge weights.
+            :return: None. Coordination statistics are saved to the community analysis directory.
+        """
         if self.type_algorithm == 'one-layer': # single layer
             layer = self.list_ca[0].get_co_action()
         elif self.cda.get_algorithm_name() in flatten_algorithm: # flattened network
             layer = self.cda.get_algorithm_name()
-        self.lm.printl(f"{file_name}. compute_coordination_communities co-action: {layer} started.")
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_community_graph) if
                        pos_csv.endswith('.p')]
         net_filename = graph_files[0]
@@ -197,7 +392,7 @@ class SingleLayerCommunitiesEvaluation:
         # read single network
         G = self.ch.load_object(self.dm.path_community_graph + net_filename)
 
-        communities = self.__get_community_nodes(G, community_label)
+        communities = self._get_community_nodes(G, community_label)
         metrics = []
         total_weight = G.size(weight=weight_label)
 
@@ -251,16 +446,27 @@ class SingleLayerCommunitiesEvaluation:
             th_size_str = f"_th_size_{str(community_size_th)}"
         self.ch.save_dataframe(df_metrics, self.dm.path_community_analysis + f"{layer}{th_size_str}_coordination_communities.csv")
 
-        self.lm.printl(f"{file_name}. compute_coordination_communities co-action: {layer} completed.")
 
-
-    def compute_metrics_node_communities(self, metrics, th_size, restrict_neighbors, merge_existing):
+    @log_method
+    def compute_metrics_node_communities(
+        self,
+        metrics: Sequence[str] | None,
+        th_size: int | None,
+        restrict_neighbors: bool,
+        merge_existing: bool
+    ) -> None:
+        """
+            Compute node metrics inside communities.
+            :param metrics: Node metric names to compute, or None for defaults.
+            :param th_size: Minimum community size to include.
+            :param restrict_neighbors: Whether neighbor-based metrics should only count selected-community neighbors.
+            :param merge_existing: Whether to merge computed columns with an existing metrics file.
+            :return: None. Node-community metrics are saved to the community analysis directory.
+        """
         if self.type_algorithm == 'one-layer': # single layer
             layer = self.list_ca[0].get_co_action()
         elif self.cda.get_algorithm_name() in flatten_algorithm: # flattened network
             layer = self.cda.get_algorithm_name()
-
-        self.lm.printl(f"{file_name}. compute_metrics_node_communities: {layer} started.")
 
         graph_files = [pos_csv for pos_csv in os.listdir(self.dm.path_community_graph) if pos_csv.endswith('.p')]
         net_filename = graph_files[0]
@@ -286,14 +492,19 @@ class SingleLayerCommunitiesEvaluation:
         # else:
         #     self.ch.save_dataframe(node_metrics_df, self.dm.path_community_analysis + f"{type_ca}_th_size_{str(th_size)}_node_metrics_communities.csv")
 
-        self.lm.printl(f"{file_name}. compute_metrics_node_communities: {layer} completed.")
-
-    def validate_communities(self):
-        self.lm.printl(f"{file_name}. validate_communities start.")
+    @log_method
+    def validate_communities(self) -> None:
+        """
+            Validate communities against available isControl labels in the source co-action data.
+            :return: None. Validation dataframes and plots are saved to the community analysis directory.
+        """
         if self.type_algorithm == 'one-layer': # single layer
             layer = self.list_ca[0].get_co_action()
             
-            data_df = self.ch.read_dataframe(f"{self.dm.path_dataset}{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{layer}.csv", dtype)
+            data_df = self.ch.read_dataframe(self._filtered_co_action_file_path(action_map[layer]), dtype)
+            if not self._has_is_control_label(data_df, layer):
+                return
+            data_df = self._normalize_is_control_column(data_df, layer)
 
         elif self.cda.get_algorithm_name() in flatten_algorithm: # flattened network
             layer = self.cda.get_algorithm_name()
@@ -302,9 +513,12 @@ class SingleLayerCommunitiesEvaluation:
             df_list = []
             for ca in self.list_ca:
                 ca_type = ca.get_co_action()
-                df = self.ch.read_dataframe(f"{self.dm.path_dataset}{self.user_fraction}_{self.type_filter}_{self.dataset_name}_{ca_type}.csv", dtype)
+                df = self.ch.read_dataframe(self._filtered_co_action_file_path(action_map[ca_type]), dtype)
+                if not self._has_is_control_label(df, ca_type):
+                    return
                 df_list.append(df)
             data_df = pd.concat(df_list)
+            data_df = self._normalize_is_control_column(data_df, layer)
 
 
         pre_df = data_df[['userId', 'isControl']]
@@ -320,16 +534,16 @@ class SingleLayerCommunitiesEvaluation:
 
         # Split by class
         n_pre_control = sum(pre_df['isControl'])
-        n_pre_coord   = sum(~pre_df['isControl'])
+        n_pre_coord = sum(~pre_df['isControl'])
         n_post_control = sum(post_df['isControl'])
-        n_post_coord   = sum(~post_df['isControl'])
+        n_post_coord = sum(~post_df['isControl'])
 
         # Metrics
-        overall_filtering = (n_pre - n_post) / n_pre
-        control_filtering = (n_pre_control - n_post_control) / n_pre_control
-        coord_filtering = (n_pre_coord - n_post_coord) / n_pre_coord
-        coord_retention   = n_post_coord / n_pre_coord
-        precision_like    = n_post_coord / n_post
+        overall_filtering = self._safe_ratio(n_pre - n_post, n_pre)
+        control_filtering = self._safe_ratio(n_pre_control - n_post_control, n_pre_control)
+        coord_filtering = self._safe_ratio(n_pre_coord - n_post_coord, n_pre_coord)
+        coord_retention = self._safe_ratio(n_post_coord, n_pre_coord)
+        precision_like = self._safe_ratio(n_post_coord, n_post)
 
         # build the lines
         lines = [
@@ -342,25 +556,7 @@ class SingleLayerCommunitiesEvaluation:
         self.lm.printl(lines)
         self.ch.save_txt(lines, self.dm.path_community_analysis + f"filtering_rates.txt")
 
-        # --- Count True/False per group
-        group_counts = (
-            post_df.groupby(['group', 'isControl'])
-            .size()
-            .unstack('isControl', fill_value=0)
-            .rename(columns={True: 'nControl', False: 'nCoord'})
-            .reset_index()
-        )
-
-        # --- Compute percentages
-        group_counts['nTotal'] = group_counts['nControl'] + group_counts['nCoord']
-        group_counts['percControl'] = group_counts['nControl'] / group_counts['nTotal']
-        group_counts['percCoord'] = group_counts['nCoord'] / group_counts['nTotal']
-
-        # --- Reset index if you want a regular dataframe
-        group_stats = group_counts.reset_index(drop=True)
-
-        # Compute purity
-        group_stats['purity'] = group_stats[['nControl', 'nCoord']].max(axis=1) / group_counts['nTotal']
+        group_stats = self._build_label_count_dataframe(post_df, ["group"])
 
         # Sort for convenience
         # group_counts = group_counts.sort_values('purity', ascending=False)
@@ -377,5 +573,3 @@ class SingleLayerCommunitiesEvaluation:
         # plt.tight_layout()
         # plt.savefig(self.dm.path_community_analysis + f"{layer}_purity_distribution.png", dpi=dpi)
         # plt.show()
-
-        self.lm.printl(f"{file_name}. validate_communities completed.")

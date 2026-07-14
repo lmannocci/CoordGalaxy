@@ -1,11 +1,13 @@
 import json
-from utils.LogManager.LogManager import *
-# from elasticsearch import Elasticsearch
-from utils.ElasticSearch.ESManager import *
-from elasticsearch.helpers import bulk
 import os
-import urllib3
+from typing import Any, Iterator
+
 import elasticsearch
+import urllib3
+from elasticsearch.helpers import bulk
+
+# from elasticsearch import Elasticsearch
+from utils.ElasticSearch.ESManager import ESManager
 urllib3.disable_warnings()
 
 absolute_path = os.path.dirname(__file__)
@@ -13,15 +15,27 @@ indeces_path = os.path.join(absolute_path, f"config{os.sep}indeces{os.sep}")
 queries_path = os.path.join(absolute_path, f"queries{os.sep}")
 
 class ESIndexManager:
-    def __init__(self, es, index_name):
+    def __init__(self, es: ESManager, index_name: str) -> None:
+        """
+        Manage uploads and queries for one Elasticsearch index.
+
+        :param es: [ESManager] Elasticsearch connection wrapper.
+        :param index_name: [str] Index name.
+        :return: None.
+        """
         self.conn = es
 
         self.index_name = index_name
         self.path_dir_index = indeces_path + self.index_name + "/"
         self.path_file_index = self.path_dir_index + "info.json"
-        self.__setEnvIndex()
+        self._set_env_index()
 
-    def __setEnvIndex(self):
+    def _set_env_index(self) -> None:
+        """
+        Create or read the local index metadata file.
+
+        :return: None.
+        """
         # create directory Index and last_id_index
         if not os.path.exists(self.path_dir_index):
             os.mkdir(self.path_dir_index)
@@ -40,18 +54,34 @@ class ESIndexManager:
                 c = json.load(f)
                 self.last_id_index = c["last_id_index"]
 
-    def existIndex(self):
+    def existIndex(self) -> bool:
+        """
+        Check whether the managed index exists.
+
+        :return: [bool] True when the index exists.
+        """
         return self.conn.es.indices.exists(index=self.index_name)
 
-    def getLastIdIndex(self):
-        self.__setEnvIndex()
+    def getLastIdIndex(self) -> int | None:
+        """
+        Return the last locally assigned document id for the managed index.
+
+        :return: [int | None] Last id, or None when the index does not exist.
+        """
+        self._set_env_index()
         if self.existIndex() == True:
             return self.last_id_index
         else:
             self.conn.lm.printl("ESIndexManager. Index " + self.index_name + " does not exist")
 
-    def dataToESFormat(self, data):
-        self.__setEnvIndex()
+    def dataToESFormat(self, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Convert dictionaries into Elasticsearch bulk-upload records.
+
+        :param data: [list[dict[str, Any]]] Source documents.
+        :return: [list[dict[str, Any]]] Bulk-upload records.
+        """
+        self._set_env_index()
         dataES = []
         for i in range(0, len(data)):
             temp = {}
@@ -61,7 +91,13 @@ class ESIndexManager:
             dataES.append(temp)
         return dataES
 
-    def uploadData(self, data):
+    def uploadData(self, data: list[dict[str, Any]]) -> None:
+        """
+        Upload data to Elasticsearch and update the local last id metadata.
+
+        :param data: [list[dict[str, Any]]] Source documents.
+        :return: None.
+        """
         if self.existIndex() == True:
             data_formatted = self.dataToESFormat(data)
             bulk(self.conn.es, data_formatted)
@@ -77,19 +113,36 @@ class ESIndexManager:
         else:
             self.conn.lm.printl("ESIndexManager. Index " + self.index_name + " does not exist")
 
-    def getCount(self):
+    def getCount(self) -> Any:
+        """
+        Return the Elasticsearch count response for the managed index.
+
+        :return: [Any] Elasticsearch count response, or None when the index does not exist.
+        """
         if self.existIndex() == True:
             return self.conn.es.cat.count(index=self.index_name, format="json")
         else:
             self.conn.lm.printl("ESIndexManager. Index " + self.index_name + " does not exist")
 
-    def deleteDocument(self, id_doc):
+    def deleteDocument(self, id_doc: str | int) -> None:
+        """
+        Delete one document from the managed index.
+
+        :param id_doc: [str | int] Document id.
+        :return: None.
+        """
         if self.existIndex() == True:
             self.conn.es.delete(index=self.index_name, id=id_doc)
         else:
             self.conn.lm.printl("ESIndexManager. Index " + self.index_name + " does not exist")
 
-    def searchQuery(self, query):
+    def searchQuery(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        """
+        Execute a scroll search and return all hits.
+
+        :param query: [dict[str, Any]] Elasticsearch query.
+        :return: [dict[str, Any] | None] Search response with concatenated hits, or None.
+        """
         # with open(queries_path + query + ".json", "r", encoding="utf-8") as f:
         #     query = json.load(f)
         self.conn.lm.printl(query)
@@ -132,7 +185,13 @@ class ESIndexManager:
         else:
             self.conn.lm.printl("ESIndexManager. Index " + self.index_name + " does not exist")
 
-    def searchQueryYield(self, query):
+    def searchQueryYield(self, query: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        """
+        Execute a scroll search and yield hits one at a time.
+
+        :param query: [dict[str, Any]] Elasticsearch query.
+        :return: [Iterator[dict[str, Any]]] Hit iterator.
+        """
         # with open(queries_path + query + ".json", "r", encoding="utf-8") as f:
         #     query = json.load(f)
         self.conn.lm.printl(query)

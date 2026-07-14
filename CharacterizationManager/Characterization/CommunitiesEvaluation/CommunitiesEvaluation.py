@@ -2,30 +2,34 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import time
-from utils.common_variables import *
+from typing import Any, Sequence
+from utils.common_variables import available_node_metrics
 
 class CommunitiesEvaluation:
-    def __init__(self, lm):
+    def __init__(self, lm: Any) -> None:
+        """
+        Create the shared community-evaluation helper.
+
+        :param lm: Log manager used for progress messages.
+        :return: None.
+        """
         self.lm = lm
 
-    def compute_node_metrics_df(self, graph, metrics, th_size, restrict_neighbors):
+    def compute_node_metrics_df(
+        self,
+        graph: nx.Graph,
+        metrics: Sequence[str] | None,
+        th_size: int | None,
+        restrict_neighbors: bool
+    ) -> pd.DataFrame:
         """
-        Compute various node-level metrics, including Guimerà and Amaral roles, and additional centrality measures.
+        Compute node-level metrics inside detected communities.
 
-        Args:
-            graph (nx.Graph): NetworkX graph where each node has a 'group' attribute indicating its community.
-            metrics (list, optional): List of metrics to compute. If None, all metrics are computed.
-                                      Supported metrics: 'z_score', 'p_coeff', 'bridging_centrality', 'role',
-                                                         'degree_centrality', 'betweenness_centrality',
-                                                         'closeness_centrality', 'eigenvector_centrality',
-                                                         'local_clustering_coefficient',
-                                                         'bridging_eigenvector_centrality'.
-            th_size (int or None, optional): Minimum community size to consider. If None, all communities are included.
-            restrict_neighbors (bool, optional): If True, considers only neighbors in selected communities for metrics.
-                                                 If False, considers all neighbors in the graph.
-
-        Returns:
-            pd.DataFrame: DataFrame with selected metrics for each node in communities meeting the size threshold.
+        :param graph: NetworkX graph whose nodes have a group attribute containing the community id.
+        :param metrics: Metric names to compute. None computes all available node metrics.
+        :param th_size: Minimum community size to include. None includes all communities.
+        :param restrict_neighbors: If True, participation metrics only count neighbors in selected communities.
+        :return: Dataframe with one row per selected node and one column per computed metric.
         """
 
         if metrics is None:

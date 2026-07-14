@@ -4,8 +4,8 @@ import networkx as nx
 import uunet.multinet as ml
 import pandas as pd
 from utils.LogManager.LogManager import *
-import json
 import os
+from InputManager.utils.id_mapping import UserIdMapper
 
 file_name = os.path.splitext(os.path.basename(__file__))[0]
 absolute_path = os.path.dirname(__file__)
@@ -18,6 +18,7 @@ class ConversionManager:
         self.ch = Checkpoint()
         self.dataset_name = dataset_name
         self.data_path = data_path + dataset_name + os.sep
+        self.user_id_mapper = UserIdMapper(self._get_user_id_mapping_path())
 
     def to_df(self, d):
         return pd.DataFrame.from_dict(d)
@@ -87,161 +88,10 @@ class ConversionManager:
 
         return MG
 
-
-    def __get_user_id_mapping_path(self):
-        return self.data_path + "user_id_mapping.json"
-
-
-    def load_user_id_mapping(self):
+    def _get_user_id_mapping_path(self):
         """
-        Load original -> compact mapping.
+        Return the path to the user id mapping created during input normalization.
 
-        Returns
-        -------
-        dict
-            {
-                original_user_id: compact_user_id
-            }
+        :return: Path to the user id mapping JSON file.
         """
-        path = self.__get_user_id_mapping_path()
-
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Mapping file not found: {path}")
-
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-
-    def load_reverse_user_id_mapping(self):
-        """
-        Load compact -> original mapping.
-        Returns
-        -------
-        dict
-            {
-                compact_user_id: original_user_id
-            }
-        """
-        mapping = self.load_user_id_mapping()
-
-        return {v: k for k, v in mapping.items()}
-    
-    def original_to_compact_user_id(self, user_id):
-        """
-        Convert original userId -> compact userId.
-        """
-        mapping = self.load_user_id_mapping()
-
-        return mapping.get(str(user_id))
-
-
-    def compact_to_original_user_id(self, compact_user_id):
-        """
-        Convert compact userId -> original userId.
-        """
-        reverse_mapping = self.load_reverse_user_id_mapping()
-
-        return reverse_mapping.get(str(compact_user_id))
-    
-
-    def restore_original_user_ids(self, df, column="userId"):
-        """
-        Restore original user IDs in a DataFrame.
-        """
-        reverse_mapping = self.load_reverse_user_id_mapping()
-
-        df = df.copy()
-        df[column] = df[column].map(reverse_mapping)
-
-        return df
-    
-
-    def compress_user_ids(self, df, column="userId"):
-            """
-            Compress original user IDs to compact user IDs in a DataFrame.
-            """
-            mapping = self.load_user_id_mapping()
-            df = df.copy()
-            df[column] = df[column].astype(str).map(mapping)
-
-            return df
-
-
-    # def convert_edge_list(self, edge_list, direction="compress"):
-    #     """
-    #     Convert userIds in an edge list.
-
-    #     Parameters
-    #     ----------
-    #     edge_list : list[tuple]
-    #         List of tuples where the first two elements are userIds.
-
-    #     direction : str
-    #         Either:
-    #         - "compress" : original -> compact
-    #         - "restore"  : compact -> original
-
-    #     Returns
-    #     -------
-    #     list[tuple]
-    #         Converted edge list.
-    #     """
-
-    #     if direction == "compress":
-    #         mapping = self.load_user_id_mapping()
-
-    #     elif direction == "restore":
-    #         mapping = self.load_reverse_user_id_mapping()
-
-    #     else:
-    #         raise ValueError(
-    #             "direction must be either 'compress' or 'restore'"
-    #         )
-
-    #     converted_edge_list = []
-
-    #     for userId1, userId2, *rest in edge_list:
-
-    #         converted_userId1 = mapping.get(str(userId1), userId1)
-    #         converted_userId2 = mapping.get(str(userId2), userId2)
-
-    #         converted_edge_list.append(
-    #             (
-    #                 converted_userId1,
-    #                 converted_userId2,
-    #                 *rest
-    #             )
-    #         )
-
-    #     return converted_edge_list
-
-    def convert_edge_list(self, edge_list, direction="compress"):
-        if direction == "compress":
-            mapping = self.load_user_id_mapping()
-
-            # Allow matching old edge lists where '-' was already replaced by '_'
-            mapping = {
-                **mapping,
-                **{k.replace("-", "_"): v for k, v in mapping.items()}
-            }
-
-        elif direction == "restore":
-            mapping = self.load_reverse_user_id_mapping()
-
-        else:
-            raise ValueError("direction must be either 'compress' or 'restore'")
-
-        converted_edge_list = []
-
-        for userId1, userId2, *rest in edge_list:
-            userId1_str = str(userId1)
-            userId2_str = str(userId2)
-
-            converted_userId1 = mapping.get(userId1_str, userId1_str)
-            converted_userId2 = mapping.get(userId2_str, userId2_str)
-
-            converted_edge_list.append(
-                (converted_userId1, converted_userId2, *rest)
-            )
-
-        return converted_edge_list
+        return self.data_path + "temp_data" + os.sep + "user_id_mapping.json"

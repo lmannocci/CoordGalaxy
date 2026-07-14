@@ -1,16 +1,30 @@
-from IntegrityConstraintManager.IntegrityConstraintManager import *
-from utils.ConversionManager.ConversionManager import *
-from utils.common_variables import *
 import os
+import time
+from typing import Any
+
+import networkx as nx
 import uunet.multinet as ml
 from cdlib import algorithms
-import networkx as nx
-from infomap import Infomap
 from cdlib import NodeClustering
+from infomap import Infomap
+
+from IntegrityConstraintManager.IntegrityConstraintManager import IntegrityConstraintManager
+from utils.ConversionManager.ConversionManager import ConversionManager
+from utils.LogManager.LogManager import LogManager
+from utils.common_variables import W_VAR, algorithm_map, parameters_map
 
 file_name = os.path.splitext(os.path.basename(__file__))[0]
+
+
 class CDAlgorithm:
-    def __init__(self, algorithm_name, parameters=None):
+    def __init__(self, algorithm_name: str, parameters: dict[str, Any] | None = None) -> None:
+        """
+            Create a community-detection algorithm configuration.
+            :param algorithm_name: [str] Algorithm name, for example louvain, infomap, glouvain, or ginfomap.
+            :param parameters: [dict[str, Any] | None] Algorithm parameters, or None when the algorithm has no
+                parameters.
+            :return: None.
+        """
         self.lm = LogManager("main")
         self.icm = IntegrityConstraintManager(file_name)
         self.icm.check_CDAlgorithm(algorithm_name, parameters)
@@ -21,28 +35,48 @@ class CDAlgorithm:
         self.cm = ConversionManager()
 
 
-    def get_algorithm_name(self):
+    def get_algorithm_name(self) -> str:
+        """
+            Return the configured community-detection algorithm name.
+            :return: [str] Algorithm name.
+        """
         return self.algorithm_name
 
-    def get_parameters(self):
+    def get_parameters(self) -> dict[str, Any] | None:
+        """
+            Return the configured algorithm parameters.
+            :return: [dict[str, Any] | None] Algorithm parameters, or None.
+        """
         return self.parameters
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+            Return a human-readable representation of the algorithm configuration.
+            :return: [str] Algorithm name with parameters formatted for display.
+        """
         if self.parameters is None or len(self.parameters) == 0:
             return self.algorithm_name
         param_str = '_'.join(f'{k}_{v}' for k, v in self.parameters.items())
         alg_str = self.algorithm_name + '(' + param_str + ')'
         return alg_str
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+            Return the path-safe representation of the algorithm configuration.
+            :return: [str] Algorithm name with parameters formatted for output paths.
+        """
         if self.parameters is None or len(self.parameters) == 0:
             return self.algorithm_name
         param_str = '_'.join(f'{k}_{v}' for k, v in self.parameters.items())
         alg_str = self.algorithm_name + '_' + param_str
         return alg_str
 
-    def cda_repr_abbr(self):
-        cda_str = self.__repr__()
+    def cda_repr_abbr(self) -> str:
+        """
+            Return an abbreviated algorithm representation for compact output paths.
+            :return: [str] Abbreviated algorithm string.
+        """
+        cda_str = repr(self)
         for key, value in algorithm_map.items():
             cda_str = cda_str.replace(key, value)
         for key, value in parameters_map.items():
@@ -50,8 +84,14 @@ class CDAlgorithm:
         return cda_str
 
 
-    def __custom_flattening(self, MG, type_flattening="sum"):
-        self.lm.printl(f"{file_name}. __custom_flattening started.")
+    def _custom_flattening(self, MG: Any, type_flattening: str = "sum") -> nx.Graph:
+        """
+            Flatten a multiplex network with a custom edge-weight aggregation rule.
+            :param MG: [Any] uunet multiplex network.
+            :param type_flattening: [str] Flattening strategy: sum, average, or and_sum.
+            :return: [nx.Graph] Flattened NetworkX graph.
+        """
+        self.lm.printl(f"{file_name}. Flattening multiplex network with method: {type_flattening}.")
         attribute = 'w_'
         # Create an empty graph to hold the union of all graphs
         flattened_graph = nx.Graph()
@@ -107,13 +147,22 @@ class CDAlgorithm:
                     isolated_nodes = [node for node, degree in flattened_graph.degree() if degree == 0]
                     flattened_graph.remove_nodes_from(isolated_nodes)
 
-        self.lm.printl(f"{file_name}. __custom_flattening completed.")
+        self.lm.printl(f"{file_name}. Flattened graph has {flattened_graph.number_of_nodes()} nodes and {flattened_graph.number_of_edges()} edges.")
         return flattened_graph
 
 
-    def __infomap_to_dict(self, im, id_to_node, id_to_layer):
+    def _infomap_to_dict(
+        self,
+        im: Infomap,
+        id_to_node: dict[int, Any],
+        id_to_layer: dict[int, str],
+    ) -> dict[str, list[Any]]:
         """
-        Convert Infomap results into a dictionary with actor, layer, and community ID.
+            Convert Infomap results into actor/layer/community lists.
+            :param im: [Infomap] Executed Infomap instance.
+            :param id_to_node: [dict[int, Any]] Mapping from internal node ids to original node ids.
+            :param id_to_layer: [dict[int, str]] Mapping from internal layer ids to original layer names.
+            :return: [dict[str, list[Any]]] Dictionary with actor, layer, and cid lists.
         """
         actor, layer, cid = [], [], []
 
@@ -124,27 +173,22 @@ class CDAlgorithm:
         return {"actor": actor, "layer": layer, "cid": cid}
 
 
-    def __run_ginfomap(self, MG, interlayer_weight=0.1, log=True):
+    def _run_ginfomap(
+        self,
+        MG: Any,
+        interlayer_weight: float = 0.1,
+        log: bool = True,
+    ) -> dict[str, list[Any]]:
         """
-        Run Infomap on a py_multinet MultiplexNetwork MG and return community assignment.
-
-        Parameters
-        ----------
-        MG : multinet.MultiplexNetwork
-            The input multiplex network (py_multinet).
-        interlayer_weight : float
-            Weight used for implicit inter-layer edges between same node across layers.
-        log : bool, default=True
-            If True, print logging information about the graph structure before running Infomap.
-
-        Returns
-        -------
-        dict
-            {"actor": [...], "layer": [...], "cid": [...]} with original IDs restored.
+            Run Infomap on a uunet multiplex network.
+            :param MG: [Any] uunet multiplex network.
+            :param interlayer_weight: [float] Weight assigned to implicit inter-layer edges between the same node.
+            :param log: [bool] Whether to write structural information to the log.
+            :return: [dict[str, list[Any]]] Community assignment with original actor and layer ids.
         """
         # Extract dictionary 'layer' -> NetworkX graph
         networkx_graphs = ml.to_nx_dict(MG)
-        original_intra_layer_edges = len(self.cm.to_df( ml.edges(MG)))
+        original_intra_layer_edges = len(self.cm.to_df(ml.edges(MG)))
         
         # --- Build integer mappings for nodes and layers ---
         all_nodes = set().union(*[set(G.nodes()) for G in networkx_graphs.values()])
@@ -205,27 +249,22 @@ class CDAlgorithm:
             self.lm.printl(f"[Infomap] Codelength: {im.codelength:.5f}")
 
         # --- Convert to dict ---
-        coms_ginfomap = self.__infomap_to_dict(im, id_to_node, id_to_layer)
+        coms_ginfomap = self._infomap_to_dict(im, id_to_node, id_to_layer)
         return coms_ginfomap
 
 
-    def __run_infomap_cdlib_compatible(self, G, weight=None, silent=True):
+    def _run_infomap_cdlib_compatible(
+        self,
+        G: nx.Graph,
+        weight: str | None = None,
+        silent: bool = True,
+    ) -> NodeClustering:
         """
-        Run Infomap on a NetworkX graph and return a CDlib NodeClustering.
-
-        Parameters
-        ----------
-        G : networkx.Graph
-            The input graph (weighted or unweighted).
-        weight : str or None
-            The edge attribute to use as weight. If None, the graph is treated as unweighted.
-        silent : bool
-            If True, suppress Infomap's console output.
-
-        Returns
-        -------
-        cdlib.NodeClustering
-            A CDlib-compatible clustering object.
+            Run Infomap on a NetworkX graph and return a CDlib-compatible clustering.
+            :param G: [nx.Graph] Input graph.
+            :param weight: [str | None] Edge attribute used as weight, or None for unweighted Infomap.
+            :param silent: [bool] Whether to suppress Infomap console output.
+            :return: [NodeClustering] CDlib-compatible clustering object.
         """
         im = Infomap(silent=silent)
 
@@ -260,8 +299,13 @@ class CDAlgorithm:
         return coms_infomap
 
 
-    def flatten_multiplex_network(self, MG):
-        self.lm.printl(f"{file_name}. flatten_multiplex_network started.")
+    def flatten_multiplex_network(self, MG: Any) -> nx.Graph:
+        """
+            Flatten a multiplex network according to the selected flat algorithm variant.
+            :param MG: [Any] uunet multiplex network.
+            :return: [nx.Graph] Flattened NetworkX graph used by single-layer community algorithms.
+        """
+        self.lm.printl(f"{file_name}. Preparing multiplex flattening for algorithm: {self.get_algorithm_name()}.")
         if self.get_algorithm_name() in ['flat_ec_louvain', 'flat_ec', 'flat_ec_infomap']:
             method = 'weighted'
         elif self.get_algorithm_name() in ['flat_nw_louvain', 'flat_nw', 'flat_nw_infomap']:
@@ -272,6 +316,8 @@ class CDAlgorithm:
             method = 'average'
         elif self.get_algorithm_name() in ['flat_and_weighted_sum_louvain', 'flat_and_weighted_sum_infomap']:
             method = 'and_sum'
+        else:
+            raise ValueError(f"Unknown flattening algorithm: {self.get_algorithm_name()}.")
 
         self.lm.printl(
             f"{file_name}. flatten_multiplex_network algorithm: {self.get_algorithm_name()}, selected method: {method}.")
@@ -285,7 +331,7 @@ class CDAlgorithm:
                 if 'weight' in data:
                     data[W_VAR] = data.pop('weight')
         elif method in ['sum', 'average', 'and_sum']:
-            G = self.__custom_flattening(MG, type_flattening=method)
+            G = self._custom_flattening(MG, type_flattening=method)
 
         # The 'weight' attribute with "or" flattening is set to zero for all edges. This can create issues in the
         # Gephi visualization. To avoid this, we remove the 'weight' attribute from all edges.
@@ -295,18 +341,23 @@ class CDAlgorithm:
                 if W_VAR in attrs:
                     del attrs[W_VAR]
 
-        self.lm.printl(f"{file_name}. flatten_multiplex_network completed.")
+        self.lm.printl(f"{file_name}. Multiplex flattening ready: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
         return G
 
-    def compute_communities(self, G):
+    def compute_communities(self, G: Any) -> Any:
+        """
+            Compute communities with the configured algorithm.
+            :param G: [Any] NetworkX graph or uunet multiplex network, depending on the algorithm.
+            :return: [Any] Community assignment object returned by the selected algorithm.
+        """
         start_time = time.time()
-        self.lm.printl(f"{file_name}. compute_communities start. {self.__str__()}")
+        self.lm.printl(f"{file_name}. Computing communities with {str(self)}.")
         if self.algorithm_name == "clique_percolation":
             # k = 3 : int Minimum number of actors in a clique. Must be at least 3.
             # m = 1 : int Minimum number of common layers in a clique.
             comm = ml.clique_percolation(G, k=self.parameters['k'], m=self.parameters['m'])
         elif self.algorithm_name == "ginfomap":
-            comm = self.__run_ginfomap(G, self.parameters['interlayer_weight'])
+            comm = self._run_ginfomap(G, self.parameters['interlayer_weight'])
             # comm = ml.infomap(G)
         elif self.algorithm_name == "abacus":
              # min.actors = 3 : int Minimum number of actors to form a community.
@@ -326,12 +377,13 @@ class CDAlgorithm:
         elif self.algorithm_name == 'flat_nw_louvain':
             comm = algorithms.louvain(G, resolution=self.parameters["resolution"], randomize=False)
         elif self.algorithm_name in ["infomap", "flat_ec_infomap", 'flat_weighted_sum_infomap', 'flat_weighted_average_infomap', 'flat_and_weighted_sum_infomap']:
-            comm = self.__run_infomap_cdlib_compatible(G, weight=W_VAR)
+            comm = self._run_infomap_cdlib_compatible(G, weight=W_VAR)
         elif self.algorithm_name == 'flat_nw_infomap':
-            comm = self.__run_infomap_cdlib_compatible(G)
+            comm = self._run_infomap_cdlib_compatible(G)
+        else:
+            raise ValueError(f"Unknown community-detection algorithm: {self.algorithm_name}.")
 
         finish_time = time.time()
         delta_time = finish_time - start_time
-        self.lm.printl(f"{file_name}. compute_communities completed in {str(delta_time)}. {self.__str__()}")
+        self.lm.printl(f"{file_name}. Communities computed with {str(self)} in {delta_time:.2f} seconds.")
         return comm
-

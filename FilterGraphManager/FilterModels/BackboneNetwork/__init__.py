@@ -1,1 +1,1 @@
-from FilterGraphManager.FilterModels.BackboneNetwork import *
+from FilterGraphManager.FilterModels.BackboneNetwork.BackboneNetwork import BackboneNetwork

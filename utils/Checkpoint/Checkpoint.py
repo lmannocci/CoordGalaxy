@@ -1,8 +1,12 @@
-from utils.LogManager.LogManager import *
-
+import os
 import pickle
-import uunet.multinet as ml
+from datetime import datetime
+from typing import Any
+
 import pandas as pd
+import uunet.multinet as ml
+
+from utils.LogManager.LogManager import LogManager
 
 # absolute_path = os.path.dirname(__file__)
 # results = os.path.join(absolute_path, f"..{os.sep}..{os.sep}results{os.sep}")
@@ -10,7 +14,11 @@ file_name = os.path.splitext(os.path.basename(__file__))[0]
 
 
 class Checkpoint:
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+            Create the checkpoint helper used to read and save framework artifacts.
+            :return: None.
+        """
         self.lm = LogManager('main')
 
     # def __get_path(self, filename, dir_path, add_prefix):
@@ -29,13 +37,24 @@ class Checkpoint:
     # PUBLIC
     # ------------------------------------------------------------------------------------------------------------------
     #dir_path = None, add_prefix = True
-    def save_object(self, obj, path):
+    def save_object(self, obj: Any, path: str) -> None:
+        """
+            Save a Python object with pickle.
+            :param obj: [Any] Object to serialize.
+            :param path: [str] Output pickle path.
+            :return: None.
+        """
         #path = self.__get_path(filename, dir_path, add_prefix)
         with open(path, 'wb') as f:  # Overwrites any existing file.
             pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
         self.lm.printl(f"{file_name}. saved object: {path}")
 
-    def load_object(self, path):
+    def load_object(self, path: str) -> Any:
+        """
+            Load a Python object from a pickle file.
+            :param path: [str] Input pickle path.
+            :return: [Any] Deserialized object.
+        """
         # if dir_path == None:
         #     path = results + filename
         # else:
@@ -46,7 +65,19 @@ class Checkpoint:
         self.lm.printl(f"{file_name}. loaded object: {path}")
         return obj
 
-    def read_dataframe(self, path, dtype, line_terminator=None):
+    def read_dataframe(
+        self,
+        path: str,
+        dtype: dict[str, Any],
+        line_terminator: str | None = None,
+    ) -> pd.DataFrame:
+        """
+            Read a CSV dataframe.
+            :param path: [str] Input CSV path.
+            :param dtype: [dict[str, Any]] Pandas dtype mapping.
+            :param line_terminator: [str | None] Optional custom line terminator.
+            :return: [pd.DataFrame] Loaded dataframe.
+        """
         if line_terminator is None:
             df = pd.read_csv(path, dtype=dtype)
         else:
@@ -54,12 +85,25 @@ class Checkpoint:
         self.lm.printl(f"{file_name}. read_dataframe: {path}")
         return df
 
-    def save_dataframe(self, df, path):
+    def save_dataframe(self, df: pd.DataFrame, path: str) -> None:
+        """
+            Save a dataframe to CSV without the index.
+            :param df: [pd.DataFrame] Dataframe to save.
+            :param path: [str] Output CSV path.
+            :return: None.
+        """
         # path = self.__get_path(filename, dir_path, add_prefix)
         df.to_csv(path, index=False)
         self.lm.printl(f"{file_name}. save_dataframe: {path}")
 
-    def update_dataframe(self, df, path, dtype):
+    def update_dataframe(self, df: pd.DataFrame, path: str, dtype: dict[str, Any]) -> None:
+        """
+            Append a dataframe to an existing CSV, or create the CSV when it does not exist.
+            :param df: [pd.DataFrame] New rows to append.
+            :param path: [str] CSV path to update.
+            :param dtype: [dict[str, Any]] Pandas dtype mapping used when reading an existing CSV.
+            :return: None.
+        """
         self.lm.printl(f"New dataframe shape: {str(df.shape[0])}")
         # Check if the file exists
         if os.path.exists(path):
@@ -76,18 +120,20 @@ class Checkpoint:
         updated_df.to_csv(path, index=False)
         self.lm.printl(f"{file_name}. update_dataframe: {path}")
 
-    def update_columns_dataframe(self, df, path, join_columns, dtype):
+    def update_columns_dataframe(
+        self,
+        df: pd.DataFrame,
+        path: str,
+        join_columns: list[str] | str,
+        dtype: dict[str, Any],
+    ) -> pd.DataFrame:
         """
-            Reads a dataframe from the given file path, performs an inner join with another dataframe,
-            and saves the resulting dataframe to a specified output path.
-
-            Parameters:
-            - path (str): Path to the input CSV file to read the dataframe from and to write to.
-            - df (pd.DataFrame): The new dataframe to join with.
-            - join_columns (list or str): Columns to use for the inner join.
-
-            Returns:
-            - pd.DataFrame: The resulting dataframe after the join.
+            Update an existing CSV by keeping only rows that match a new dataframe on join columns.
+            :param df: [pd.DataFrame] New dataframe to join with the existing CSV.
+            :param path: [str] Existing CSV path to read and overwrite.
+            :param join_columns: [list[str] | str] Columns used for the inner join.
+            :param dtype: [dict[str, Any]] Pandas dtype mapping used when reading the existing CSV.
+            :return: [pd.DataFrame] Joined dataframe saved back to path.
             """
         # Read the existing dataframe from the file
         input_df = pd.read_csv(path, dtype=dtype)
@@ -100,32 +146,50 @@ class Checkpoint:
 
         return result_df
 
-    def read_multiplex_network(self, path):
+    def read_multiplex_network(self, path: str) -> Any:
+        """
+            Read a uunet multiplex network from its text format.
+            :param path: [str] Input multiplex graph path, usually multiplex_graph.txt.
+            :return: [Any] In-memory uunet multiplex network.
+        """
+        file_size_mb = os.path.getsize(path) / (1024 * 1024)
+        self.lm.printl(
+            f"{file_name}. read_multiplex_network start: path={path}, "
+            f"size={file_size_mb:.2f} MB. Using uunet ml.read; large files can take a long time."
+        )
         MG = ml.read(file=path)
-        self.lm.printl(f"{file_name}. read_multilayer_network: {path}")
+        layers = ml.layers(MG)
+        self.lm.printl(
+            f"{file_name}. read_multiplex_network completed: "
+            f"layers={len(layers)}, names={layers}, path={path}"
+        )
         return MG
 
-    def save_multiplex_network(self, MG, path):
+    def save_multiplex_network(self, MG: Any, path: str) -> None:
+        """
+            Save a uunet multiplex network to its text format.
+            :param MG: [Any] In-memory uunet multiplex network.
+            :param path: [str] Output multiplex graph path.
+            :return: None.
+        """
         ml.write(MG, file=path)
         self.lm.printl(f"{file_name}. save_multilayer_network: {path}")
 
 
-    from datetime import datetime
-
-    def save_txt(self, lines, path, append=False, add_timestamp=False):
+    def save_txt(
+        self,
+        lines: list[str] | str,
+        path: str,
+        append: bool = False,
+        add_timestamp: bool = False,
+    ) -> None:
         """
-        Save a list of strings (or a single string) to a text file, one per line.
-
-        Parameters
-        ----------
-        lines : list[str] or str
-            The text lines to write. If a single string is provided, it is written as one line.
-        filepath : str
-            Path of the output text file.
-        append : bool, optional
-            If True, append to the existing file instead of overwriting. Default is False.
-        add_timestamp : bool, optional
-            If True, adds a timestamp header before the lines. Default is False.
+            Save text lines to a text file.
+            :param lines: [list[str] | str] Text lines to write. A single string is written as one line.
+            :param path: [str] Output text path.
+            :param append: [bool] If True, append to the existing file instead of overwriting.
+            :param add_timestamp: [bool] If True, write a timestamp header before the lines.
+            :return: None.
         """
         # Ensure input is a list
         if isinstance(lines, str):
@@ -139,4 +203,4 @@ class Checkpoint:
             f.write("\n".join(lines))
             f.write("\n")  # final newline for safety
 
-        self.lm.printl(f"[✓] Saved {len(lines)} line(s) to {path} ({'append' if append else 'overwrite'} mode).")
+        self.lm.printl(f"{file_name}. Saved {len(lines)} line(s) to {path} ({'append' if append else 'overwrite'} mode).")

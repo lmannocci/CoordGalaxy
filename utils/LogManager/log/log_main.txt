@@ -1,30 +1,152 @@
-[2025-11-17 16:22:58]: OverlappingCommunityManager. plot_single_layer_metrics (cosine_similarity) start.
-[2025-11-17 16:22:58]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/stacked_plot/flux_df/louvain_resolution_1_harmonicMean_th_size_200_mid_th_0.5_flux_df.csv
-[2025-11-17 16:22:58]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/louvain_resolution_1_single_layer_metrics_communities.csv
-[2025-11-17 16:22:58]: Checkpoint. save_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/cosine_similarity/louvain_resolution_1_harmonicMean_th_size_200_mid_th_0.5_normalized_True_single_layer_metrics_cosine_similarity.csv
-[2025-11-17 16:22:58]: OverlappingCommunityManager. plot_single_layer_metrics (cosine_similarity)completed.
-[2025-11-17 16:22:58]: OverlappingCommunityManager. plot_barchart_cosine_similarity start.
-[2025-11-17 16:22:59]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/cosine_similarity/louvain_resolution_1_harmonicMean_th_size_200_mid_th_0.5_normalized_True_single_layer_metrics_cosine_similarity.csv
-[2025-11-17 16:23:00]: OverlappingCommunityManager. plot_barchart_cosine_similarity completed.
-[2025-11-17 16:23:00]: Plotting flat_weighted_sum_louvain (1,) coordination by label against louvain
-[2025-11-17 16:23:00]: OverlappingCommunityManager. plot_coordination_by_label start.
-[2025-11-17 16:23:00]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/stacked_plot/flux_df/louvain_resolution_1_harmonicMean_th_size_200_mid_th_0.5_flux_df.csv
-[2025-11-17 16:23:00]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/louvain_resolution_1_coordination_communities.csv
-[2025-11-17 16:23:01]: OverlappingCommunityManager. /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/louvain_resolution_1_flat_weighted_sum_louvain_avg_weight_coordination.png saved.
-[2025-11-17 16:23:01]: OverlappingCommunityManager. /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/louvain_resolution_1_multimodal_avg_weight_coordination.png saved.
-[2025-11-17 16:23:01]: OverlappingCommunityManager. plot_coordination_by_label completed.
-[2025-11-17 16:23:02]: OverlappingCommunityManager. plot_single_layer_metrics (cosine_similarity) start.
-[2025-11-17 16:23:05]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/stacked_plot/flux_df/infomap_harmonicMean_th_size_200_mid_th_0.5_flux_df.csv
-[2025-11-17 16:23:05]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/infomap_single_layer_metrics_communities.csv
-[2025-11-17 16:23:05]: Checkpoint. save_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/cosine_similarity/infomap_harmonicMean_th_size_200_mid_th_0.5_normalized_True_single_layer_metrics_cosine_similarity.csv
-[2025-11-17 16:23:05]: OverlappingCommunityManager. plot_single_layer_metrics (cosine_similarity)completed.
-[2025-11-17 16:23:06]: OverlappingCommunityManager. plot_barchart_cosine_similarity start.
-[2025-11-17 16:23:06]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/cosine_similarity/infomap_harmonicMean_th_size_200_mid_th_0.5_normalized_True_single_layer_metrics_cosine_similarity.csv
-[2025-11-17 16:23:07]: OverlappingCommunityManager. plot_barchart_cosine_similarity completed.
-[2025-11-17 16:23:07]: Plotting flat_weighted_sum_infomap None coordination by label against infomap
-[2025-11-17 16:23:07]: OverlappingCommunityManager. plot_coordination_by_label start.
-[2025-11-17 16:23:07]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/stacked_plot/flux_df/infomap_harmonicMean_th_size_200_mid_th_0.5_flux_df.csv
-[2025-11-17 16:23:08]: Checkpoint. read_dataframe: /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/infomap_coordination_communities.csv
-[2025-11-17 16:23:08]: OverlappingCommunityManager. /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/infomap_flat_weighted_sum_infomap_avg_weight_coordination.png saved.
-[2025-11-17 16:23:09]: OverlappingCommunityManager. /home/lmannocci/CBPlusPlus/OverlappingCommunityManager/../results/uk/top_co_action_merge_0.05/merged_network/OTW/tw_6h-tw_slide_interval_5h/average/multi_co_action/rt_tics_mfa_26_md_0.126__rp_tics_mfa_4_md_0.451__ud_tics_mfa_3_md_0.791__m_tics_mfa_48_md_0.111__h_tics_mfa_14_md_0.246/overlapping_analysis/validation/infomap_multimodal_avg_weight_coordination.png saved.
-[2025-11-17 16:23:09]: OverlappingCommunityManager. plot_coordination_by_label completed.
+[2026-07-13 16:45:10]: filter_graph - START
+[2026-07-13 16:45:10]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/temporal/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/info_edge_list/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/info_edge_list/temporal/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/processed/
+[2026-07-13 16:45:11]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list_df/
+[2026-07-13 16:45:12]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/graph/
+[2026-07-13 16:45:12]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/gephi_graph/
+[2026-07-13 16:45:12]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/
+[2026-07-13 16:45:12]: FilterGraphManager. Created directory /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/
+[2026-07-13 16:45:12]: [FILTER][co-comment] start merge_filter_action_2_median_0.914
+[2026-07-13 16:45:12]: [FILTER][co-comment] threshold on w_: 0.914; files=1
+[2026-07-13 16:45:12]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:12]: Checkpoint. saved object: /home/lmannocci/CBMoltbook/FilterGraphManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:13]: [FILTER][co-comment] 2018-01-01 19-45-38_2023-01-06 19-45-38.p: 2 -> 1 edges
+[2026-07-13 16:45:13]: [FILTER][co-comment] completed merge_filter_action_2_median_0.914
+[2026-07-13 16:45:13]: filter_graph - COMPLETED
+[2026-07-13 16:45:13]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:16]: compute_network_metrics - START
+[2026-07-13 16:45:16]: compute_network_metrics - START
+[2026-07-13 16:45:17]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:17]: NetworkMeasure. compute_network_metrics metric=connected_components: all layers start.
+[2026-07-13 16:45:17]: NetworkMeasure. compute_network_metrics metric=connected_components: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:17]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:17]: NetworkMeasure. metric=connected_components, layer=co-comment: start.
+[2026-07-13 16:45:17]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/size_connected_components.csv
+[2026-07-13 16:45:18]: PlotManager. plot_line finished. plot_size_connected_components.png saved.
+[2026-07-13 16:45:18]: NetworkMeasure. metric=connected_components, layer=co-comment: completed in 1.087s.
+[2026-07-13 16:45:18]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:18]: NetworkMeasure. compute_network_metrics metric=connected_components: saved output.
+[2026-07-13 16:45:18]: NetworkMeasure. compute_network_metrics metric=weight_statistics: all layers start.
+[2026-07-13 16:45:19]: NetworkMeasure. compute_network_metrics metric=weight_statistics: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:19]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:19]: NetworkMeasure. metric=weight_statistics, layer=co-comment: start.
+[2026-07-13 16:45:20]: PlotManager. plot_histogram finished. edge_weight_distribution.png saved.
+[2026-07-13 16:45:20]: NetworkMeasure. metric=weight_statistics, layer=co-comment: completed in 0.733s.
+[2026-07-13 16:45:20]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:20]: NetworkMeasure. compute_network_metrics metric=weight_statistics: saved output.
+[2026-07-13 16:45:20]: NetworkMeasure. compute_network_metrics metric=nNodes: all layers start.
+[2026-07-13 16:45:23]: NetworkMeasure. compute_network_metrics metric=nNodes: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:23]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:24]: NetworkMeasure. metric=nNodes, layer=co-comment: start.
+[2026-07-13 16:45:24]: NetworkMeasure. metric=nNodes, layer=co-comment: completed in 0.000s.
+[2026-07-13 16:45:24]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:24]: NetworkMeasure. compute_network_metrics metric=nNodes: saved output.
+[2026-07-13 16:45:25]: NetworkMeasure. compute_network_metrics metric=nEdges: all layers start.
+[2026-07-13 16:45:31]: NetworkMeasure. compute_network_metrics metric=nEdges: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:31]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:31]: NetworkMeasure. metric=nEdges, layer=co-comment: start.
+[2026-07-13 16:45:32]: NetworkMeasure. metric=nEdges, layer=co-comment: completed in 0.000s.
+[2026-07-13 16:45:32]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:32]: NetworkMeasure. compute_network_metrics metric=nEdges: saved output.
+[2026-07-13 16:45:32]: NetworkMeasure. compute_network_metrics metric=directed: all layers start.
+[2026-07-13 16:45:33]: NetworkMeasure. compute_network_metrics metric=directed: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:33]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:33]: NetworkMeasure. metric=directed, layer=co-comment: start.
+[2026-07-13 16:45:33]: NetworkMeasure. metric=directed, layer=co-comment: completed in 0.000s.
+[2026-07-13 16:45:33]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:34]: NetworkMeasure. compute_network_metrics metric=directed: saved output.
+[2026-07-13 16:45:34]: NetworkMeasure. compute_network_metrics metric=sizeLargestComponent: all layers start.
+[2026-07-13 16:45:34]: NetworkMeasure. compute_network_metrics metric=sizeLargestComponent: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:34]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:34]: NetworkMeasure. metric=sizeLargestComponent, layer=co-comment: start.
+[2026-07-13 16:45:34]: NetworkMeasure. metric=sizeLargestComponent, layer=co-comment: completed in 0.000s.
+[2026-07-13 16:45:34]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:34]: NetworkMeasure. compute_network_metrics metric=sizeLargestComponent: saved output.
+[2026-07-13 16:45:35]: NetworkMeasure. compute_network_metrics metric=density: all layers start.
+[2026-07-13 16:45:35]: NetworkMeasure. compute_network_metrics metric=density: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:35]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:35]: NetworkMeasure. metric=density, layer=co-comment: start.
+[2026-07-13 16:45:35]: NetworkMeasure. metric=density, layer=co-comment: completed in 0.000s.
+[2026-07-13 16:45:35]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:35]: NetworkMeasure. compute_network_metrics metric=density: saved output.
+[2026-07-13 16:45:36]: NetworkMeasure. compute_network_metrics metric=clusteringCoefficient: all layers start.
+[2026-07-13 16:45:36]: NetworkMeasure. compute_network_metrics metric=clusteringCoefficient: compute layer=co-comment, filter=mfa_2_md_0.914, tw=2018-01-01 19-45-38_2023-01-06 19-45-38.p.
+[2026-07-13 16:45:36]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:36]: NetworkMeasure. metric=clusteringCoefficient, layer=co-comment: start.
+[2026-07-13 16:45:36]: NetworkMeasure. metric=clusteringCoefficient, layer=co-comment: completed in 0.005s.
+[2026-07-13 16:45:36]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/analysis/network_metrics.csv
+[2026-07-13 16:45:37]: NetworkMeasure. compute_network_metrics metric=clusteringCoefficient: saved output.
+[2026-07-13 16:45:37]: compute_network_metrics - COMPLETED
+[2026-07-13 16:45:37]: compute_network_metrics - COMPLETED
+[2026-07-13 16:45:37]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/NetworkManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:37]: create_weighted_graph - START
+[2026-07-13 16:45:37]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/NetworkManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:37]: Checkpoint. saved object: /home/lmannocci/CBMoltbook/NetworkManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:38]: NetworkManager. Created graph for co-action=co-comment, file=2018-01-01 19-45-38_2023-01-06 19-45-38.p, filter=merge_filter_action_2_median_0.914, nodes=2, edges=1.
+[2026-07-13 16:45:38]: create_weighted_graph - COMPLETED
+[2026-07-13 16:45:38]: save_gephi_network - START
+[2026-07-13 16:45:38]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/NetworkManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:38]: ConversionManager: graph_to_gephi: /home/lmannocci/CBMoltbook/NetworkManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/gephi_graph/2018-01-01 19-45-38_2023-01-06 19-45-38.gexf
+[2026-07-13 16:45:38]: NetworkManager. Saved Gephi graph for co-action=co-comment: 2018-01-01 19-45-38_2023-01-06 19-45-38.gexf.
+[2026-07-13 16:45:38]: save_gephi_network - COMPLETED
+[2026-07-13 16:45:39]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:39]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/
+[2026-07-13 16:45:39]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/coms/
+[2026-07-13 16:45:39]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/graph/
+[2026-07-13 16:45:39]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/gephi_graph/
+[2026-07-13 16:45:39]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/user_dataframe/
+[2026-07-13 16:45:40]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/visualization/
+[2026-07-13 16:45:40]: CommunityDetectionManager. Created directory /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/analysis/
+[2026-07-13 16:45:40]: louvain
+[2026-07-13 16:45:40]: compute_community_detection - START
+[2026-07-13 16:45:40]: CommunityDetectionManager. algorithm: louvain(resolution_1)
+[2026-07-13 16:45:40]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:40]: CDAlgorithm. Computing communities with louvain(resolution_1).
+[2026-07-13 16:45:41]: CDAlgorithm. Communities computed with louvain(resolution_1) in 0.14 seconds.
+[2026-07-13 16:45:41]: Checkpoint. saved object: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/coms/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:41]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/user_dataframe/com_df.csv
+[2026-07-13 16:45:41]: Checkpoint. saved object: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:41]: ConversionManager: graph_to_gephi: /home/lmannocci/CBMoltbook/CommunityDetectionManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/gephi_graph/2018-01-01 19-45-38_2023-01-06 19-45-38.gexf
+[2026-07-13 16:45:41]: compute_community_detection - COMPLETED
+[2026-07-13 16:45:41]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/edge_list/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:41]: louvain
+[2026-07-13 16:45:42]: compute_community_summary_statistics - START
+[2026-07-13 16:45:42]: compute_community_summary_statistics - START
+[2026-07-13 16:45:42]: Checkpoint. read_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/user_dataframe/com_df.csv
+[2026-07-13 16:45:42]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/analysis/louvain_resolution_1_statistics_communities.csv
+[2026-07-13 16:45:43]: PlotManager. plot_line finished. size_communities_distribution.png saved.
+[2026-07-13 16:45:43]: compute_community_summary_statistics - COMPLETED
+[2026-07-13 16:45:43]: compute_community_summary_statistics - COMPLETED
+[2026-07-13 16:45:43]: compute_metrics_communities - START
+[2026-07-13 16:45:43]: compute_metrics_communities - START
+[2026-07-13 16:45:43]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:44]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/analysis/co-comment_th_size_70_metrics_communities.csv
+[2026-07-13 16:45:44]: compute_metrics_communities - COMPLETED
+[2026-07-13 16:45:44]: compute_metrics_communities - COMPLETED
+[2026-07-13 16:45:44]: compute_network_node_metrics - START
+[2026-07-13 16:45:44]: compute_network_node_metrics - START
+[2026-07-13 16:45:44]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:44]: degree_centrality computed in 0.00 seconds
+[2026-07-13 16:45:45]: local_clustering_coefficient computed in 0.00 seconds
+[2026-07-13 16:45:45]: page_rank computed in 0.00 seconds
+[2026-07-13 16:45:45]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/analysis/co-comment_node_metrics.csv
+[2026-07-13 16:45:45]: compute_network_node_metrics - COMPLETED
+[2026-07-13 16:45:45]: compute_network_node_metrics - COMPLETED
+[2026-07-13 16:45:45]: validate_communities - START
+[2026-07-13 16:45:45]: validate_communities - START
+[2026-07-13 16:45:45]: Checkpoint. read_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../data/mh/co_action_data_th_0.01_top_co_action_merge/comment.csv
+[2026-07-13 16:45:46]: SingleLayerCommuntiesEvaluation. validate_communities skipped: isControl label not found in co-comment.
+[2026-07-13 16:45:46]: validate_communities - COMPLETED
+[2026-07-13 16:45:46]: validate_communities - COMPLETED
+[2026-07-13 16:45:46]: compute_community_edge_weight_statistics - START
+[2026-07-13 16:45:46]: compute_community_edge_weight_statistics - START
+[2026-07-13 16:45:46]: Checkpoint. loaded object: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/graph/2018-01-01 19-45-38_2023-01-06 19-45-38.p
+[2026-07-13 16:45:46]: Community 1/1. Processing...
+[2026-07-13 16:45:46]: Checkpoint. save_dataframe: /home/lmannocci/CBMoltbook/CharacterizationManager/../results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/community/louvain_resolution_1/analysis/co-comment_th_size_None_coordination_communities.csv
+[2026-07-13 16:45:47]: compute_community_edge_weight_statistics - COMPLETED
+[2026-07-13 16:45:47]: compute_community_edge_weight_statistics - COMPLETED
