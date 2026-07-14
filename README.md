@@ -787,39 +787,246 @@ dict_ca_filter2 = {"co-comment": Filter("merge_filter_action", 2, None)}
 
 ## Results Directory
 
-Structure of results directory.
+The framework writes outputs under one dataset-specific result root:
 
-```bash
-├results/
-├── merged_network_results
-│   ├── ANY
-│   ├── ATW
-│   │   └── tw_1d
-│   │       ├── co-retweet
-│   │       │   └── overlapping
-│   │       │       ├── edge_list
-│   │       │       │   └── temporal
-│   │       │       ├── info_edge_list
-│   │       │       │   └── temporal
-│   │       │       └── th_0.7
-│   │       │           ├── analysis
-│   │       │           ├── community
-│   │       │           ├── edge_list
-│   │       │           └── graph
-│   │       ├── info_tw
-│   │       │   ├── end_date_list.p
-│   │       │   └── start_date_list.p
-│   │       └── multi_co_action
-│   │           └── co-retweet_overlapping_th_0.7_co-reply_overlapping_th_0.7co-url-domain_overlapping_th_0.7
-│   │               ├── analysis
-│   │               └── community
-│   │                   ├── coms
-│   │                   ├── gephi_graph
-│   │                   ├── graph
-│   │                   └── user_dataframe
-│   └── OTW
-└── temporal_network_results
-    ├── ANY
-    ├── ATW
-    └── OTW
+```text
+results/<dataset>/<type_filter>_<user_fraction>/
 ```
+
+For example:
+
+```text
+results/moltbook/top_co_action_merge_None/
+results/iran5/top_co_action_merge_0.05/
+results/mh/top_co_action_merge_0.01/
+```
+
+`<type_filter>_<user_fraction>` identifies the optional user-selection stage. If no user selection is applied, the
+fraction is usually `None`. If user selection is applied, the same setting also determines which co-action input
+directory is read from `data/<dataset>/co_action_data_th_<user_fraction>_<type_filter>/`.
+
+### Network Result Layout
+
+The network result path is controlled by the `TimeWindow` object:
+
+```text
+results/<dataset>/<type_filter>_<user_fraction>/
+└── <output_network>_network/
+    └── <type_time_window>/
+        └── <time_window_instance>/
+            ├── info_tw/
+            └── <merge_type>/                         # only for merged networks
+```
+
+The path segments mean:
+
+```text
+<output_network>       merged or temporal
+<type_time_window>     ANY, ATW, or OTW
+<time_window_instance> tw_7d, tw_1d-tw_slide_interval_12h, ...
+<merge_type>           average, sum, or another merge strategy configured in TimeWindow
+```
+
+Examples:
+
+```text
+results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/
+results/moltbook/top_co_action_merge_None/merged_network/OTW/tw_1d-tw_slide_interval_12h/average/
+```
+
+`info_tw/` stores the computed time-window metadata, for example:
+
+```text
+info_tw/window_list.p
+```
+
+### Single-Layer Co-Action Results
+
+Each co-action layer has its own directory under the time-window root:
+
+```text
+<merge_type>/<co-action>/<similarity_function>/
+├── edge_list/
+│   ├── <merged_start>_<merged_end>.p
+│   └── temporal/
+│       └── <window_start>_<window_end>.p
+├── info_edge_list/
+│   ├── <merged_start>_<merged_end>.csv
+│   └── temporal/
+│       └── <window_start>_<window_end>.csv
+├── processed/
+└── analysis/
+    ├── network_metrics.csv
+    ├── nAction_threshold_df.csv
+    ├── nAction_layer_df.csv
+    ├── nAction_overlapping_df.csv
+    ├── plot_nAction_threshold_nNodes.png
+    └── plot_nAction_threshold_nEdges.png
+```
+
+Example:
+
+```text
+results/mh/top_co_action_merge_0.01/merged_network/OTW/tw_7d-tw_slide_interval_6d/average/
+└── co-comment/
+    └── tfidf_cosine_similarity/
+        ├── edge_list/
+        ├── info_edge_list/
+        ├── processed/
+        └── analysis/
+```
+
+The main contents are:
+
+```text
+edge_list/             Pickled edge lists. The root contains merged edge lists; temporal/ contains one file per window.
+info_edge_list/        Optional CSV metadata for edges, mostly useful for overlapping-style and saved-info analyses.
+processed/             Intermediate objects created while building or filtering networks.
+analysis/              Network-level statistics, threshold-selection CSVs, and plots.
+```
+
+### Filtered Network Results
+
+Graph filters are represented as nested path segments below the co-action similarity directory:
+
+```text
+<co-action>/<similarity_function>/<filter_1>/<filter_2>/
+├── edge_list/
+├── edge_list_df/
+├── info_edge_list/
+├── processed/
+├── graph/
+├── gephi_graph/
+├── analysis/
+└── community/
+```
+
+Example with a chained filter:
+
+```text
+co-comment/tfidf_cosine_similarity/merge_filter_action_2/median_0.914/
+```
+
+The first segment, `merge_filter_action_2`, means that edges were kept after applying the action-count filter. The
+second segment, `median_0.914`, is a data-driven weight filter. For filters such as `median`, `mean`, `low_std`, and
+`high_std`, the threshold value is computed from the previous edge-list output and then used in the directory name.
+
+Filtered directory contents:
+
+```text
+edge_list/             Pickled filtered edge lists.
+edge_list_df/          CSV version of filtered edge lists.
+graph/                 Pickled NetworkX graph objects.
+gephi_graph/           GEXF files for Gephi.
+analysis/              Metrics and plots computed on the filtered network.
+community/             Community-detection roots for this filtered layer.
+```
+
+### Multiplex Results
+
+When more than one co-action is selected, the framework creates a multiplex instance under `multi_co_action/`:
+
+```text
+<merge_type>/multi_co_action/<compact_layer_instance>/
+├── graph/
+│   └── multiplex_graph.txt
+├── edge_list_df/
+├── processed/
+├── analysis/
+│   ├── network_metrics.csv
+│   ├── jaccard_actors_multiplex_graph.csv
+│   ├── coverage_edges_multiplex_graph.csv
+│   └── *_layer_comparison_heatmaps.png
+├── visualization/
+├── community/
+├── overlapping_analysis/
+└── latex/
+```
+
+Example:
+
+```text
+multi_co_action/url_tics_mfa_2_md_0.908__m_tics_mfa_2_md_0.044__h_tics_mfa_2_md_0.062__rp_tics_mfa_2_md_0.127__rt_tics_mfa_2_md_0.057/
+```
+
+The compact multiplex directory name is generated from the selected co-actions, similarity functions, and filters:
+
+```text
+url    co-url-domain
+m      co-mention
+h      co-hashtag
+rp     co-reply
+rt     co-retweet
+tics   tfidf_cosine_similarity
+mfa_2  merge_filter_action_2
+md_*   median filter with the resolved threshold
+```
+
+### Community Detection Results
+
+Community-detection output is stored below the `community/` directory of either a filtered single-layer network or a
+multiplex network:
+
+```text
+community/<algorithm_repr>/
+├── coms/
+│   └── coms.p
+├── graph/
+├── gephi_graph/
+├── user_dataframe/
+│   └── com_df.csv
+├── visualization/
+└── analysis/
+    ├── <algorithm>_statistics_communities.csv
+    ├── <algorithm>_info_cda_per_community.csv
+    ├── <algorithm>_info_cda_per_layer.csv
+    ├── <algorithm>_coordination_communities.csv
+    ├── <algorithm>_group_isControl_validation_communities.csv
+    ├── <algorithm>_top_10_communities_summary.csv
+    ├── <algorithm>_top_10_communities_url_domain_frequency.csv
+    └── <algorithm>_top_10_communities_url_domain_category_percentage.csv
+```
+
+`com_df.csv` is the central membership file. For single-layer networks it maps users to communities. For multiplex
+networks it maps actor-layer tuples to communities and includes the layer information.
+
+### Community Comparison Results
+
+Community comparisons are written under the multiplex instance `overlapping_analysis/` directory:
+
+```text
+overlapping_analysis/
+├── <prefix>_overlapping_tensor.p
+├── <prefix>_overlapping_set.p
+├── <prefix>_single_layer_metrics_communities.csv
+├── <prefix>_node_metrics.csv
+├── heatmap/
+├── stacked_plot/
+│   └── flux_df/
+├── t_sne_plot/
+├── umap_plot/
+├── starplot/
+├── pca_plot/
+├── NMI/
+├── node_metrics_gained_lost/
+│   ├── KDE_plot/
+│   └── distribution_plot/
+├── node_metrics_boxplot/
+├── validation/
+└── cosine_similarity/
+```
+
+This directory is used by `CommunityComparisonManager` to compare partitions produced by different algorithms or
+different network instances.
+
+### Latex Results
+
+LaTeX tables are written inside the multiplex instance `latex/` directory:
+
+```text
+latex/
+├── glouvain_top_10_communities_summary_table.tex
+└── glouvain_top_10_communities_url_category_table.tex
+```
+
+These files are generated from CSVs already stored in the community `analysis/` directory.

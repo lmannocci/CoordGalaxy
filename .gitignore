@@ -1,5 +1,7 @@
 results/
-data/
+.DS_Store
+data/*
+!data/.gitkeep
 utils/LogManager/log/
 # Byte-compiled files
 *.pyc
